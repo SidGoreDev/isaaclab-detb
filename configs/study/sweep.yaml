@@ -1,0 +1,32 @@
+name: design_parameter_screening
+screening_points:
+  - id: nominal
+    leg_length_scale: 1.00
+    body_mass_kg: 32.0
+    torque_limit_scale: 1.00
+    stiffness: 180.0
+    damping: 8.0
+  - id: long_leg_light
+    leg_length_scale: 1.08
+    body_mass_kg: 29.0
+    torque_limit_scale: 1.05
+    stiffness: 200.0
+    damping: 8.0
+  - id: short_leg_high_torque
+    leg_length_scale: 0.94
+    body_mass_kg: 31.0
+    torque_limit_scale: 1.15
+    stiffness: 185.0
+    damping: 9.0
+  - id: heavy_low_torque
+    leg_length_scale: 1.02
+    body_mass_kg: 37.0
+    torque_limit_scale: 0.88
+    stiffness: 170.0
+    damping: 7.5
+  - id: compliant_mid_mass
+    leg_length_scale: 1.01
+    body_mass_kg: 33.0
+    torque_limit_scale: 1.02
+    stiffness: 155.0
+    damping: 6.5

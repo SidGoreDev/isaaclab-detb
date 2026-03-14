@@ -1,0 +1,29 @@
+defaults:
+  - robot: anymal_c
+  - task: flat_walk
+  - terrain: flat_eval
+  - sensor: proprio
+  - fault: nominal
+  - study: baseline
+  - analysis: default
+  - _self_
+
+app:
+  name: DETB
+  command: baseline
+
+execution:
+  backend: mock
+  output_root: outputs
+  headless: true
+  num_envs: 64
+  train_steps: 512
+  eval_episodes: 8
+  seeds: [11, 22, 33]
+  checkpoint_name: baseline_policy.pt
+  isaac_sim_version: "5.1.0"
+  isaaclab_version: "2.3.0"
+  isaaclab_root: "../IsaacLab-5.1"
+
+logging:
+  write_svg_plots: true

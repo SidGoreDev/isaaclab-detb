@@ -1,0 +1,6 @@
+name: depth_forward
+profile: S3
+modalities: [imu, joint_encoders, depth_camera]
+compute_cost: 1.35
+vram_gb: 4.4
+noise_sigma: 0.03

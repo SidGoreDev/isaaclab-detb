@@ -1,0 +1,4 @@
+name: latency
+class_name: latency
+severity: 0.2
+latency_steps: 4

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "detb"
+version = "0.1.0"
+description = "Design Evaluation Test Bed scaffold for Isaac Lab quadruped studies"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "hydra-core>=1.3,<2.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+detb = "detb.cli:main"
+
+[tool.setuptools]
+packages = ["detb", "detb.backends"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

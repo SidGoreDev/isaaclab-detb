@@ -1,0 +1,4 @@
+family: locomotion
+name: flat_walk
+command: Isaac-Velocity-Flat-Anymal-C-v0
+success_distance_m: 8.0

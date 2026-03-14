@@ -1,0 +1,6 @@
+name: raycaster
+profile: S2
+modalities: [imu, joint_encoders, height_scanner]
+compute_cost: 1.15
+vram_gb: 3.2
+noise_sigma: 0.02

@@ -1,0 +1,6 @@
+name: proprio
+profile: S1
+modalities: [imu, joint_encoders]
+compute_cost: 1.0
+vram_gb: 2.5
+noise_sigma: 0.01
