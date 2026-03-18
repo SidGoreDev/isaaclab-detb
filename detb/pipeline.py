@@ -10,6 +10,7 @@ from omegaconf import OmegaConf
 
 from detb.artifacts import (
     rebuild_summary,
+    write_playback_summary,
     write_markdown_summary,
     write_requirements_markdown,
     write_success_plot,
@@ -476,50 +477,60 @@ def _objective_score(
 def run_visualize(cfg) -> CommandResult:
     visual_cfg = merge_cfg(cfg, {"execution": {"backend": "isaaclab"}})
     run_dir, manifest, artifacts = _prepare_run(visual_cfg, "visualize")
-    backend = IsaacLabBackend(visual_cfg)
-    command, cwd = backend.build_visualize_command(visual_cfg)
+    runtime_cfg = _with_runtime_context(visual_cfg, run_dir, manifest)
+    backend = IsaacLabBackend(runtime_cfg)
+    command, cwd = backend.build_visualize_command(runtime_cfg)
     launch_spec = {
         "mode": "isaaclab_play",
-        "execute": bool(visual_cfg.visualization.execute),
+        "execute": bool(runtime_cfg.visualization.execute),
         "cwd": str(cwd),
         "command": command,
-        "task": str(task_registry_id(visual_cfg)),
-        "device": str(visual_cfg.execution.device),
-        "num_envs": int(visual_cfg.visualization.num_envs),
-        "real_time": bool(visual_cfg.visualization.real_time),
-        "video": bool(visual_cfg.visualization.video),
-        "use_pretrained_checkpoint": bool(visual_cfg.visualization.use_pretrained_checkpoint),
-        "load_run": str(visual_cfg.visualization.load_run),
-        "checkpoint": str(visual_cfg.visualization.checkpoint),
-        "headless": bool(visual_cfg.visualization.headless),
+        "task": str(task_registry_id(runtime_cfg)),
+        "device": str(runtime_cfg.execution.device),
+        "num_envs": int(runtime_cfg.visualization.num_envs),
+        "rollout_steps": int(runtime_cfg.visualization.rollout_steps),
+        "real_time": bool(runtime_cfg.visualization.real_time),
+        "video": bool(runtime_cfg.visualization.video),
+        "use_pretrained_checkpoint": bool(runtime_cfg.visualization.use_pretrained_checkpoint),
+        "load_run": str(runtime_cfg.visualization.load_run),
+        "checkpoint": str(runtime_cfg.visualization.checkpoint),
+        "headless": bool(runtime_cfg.visualization.headless),
     }
-    if visual_cfg.visualization.execute:
-        return_code = backend.run_command(command, cwd)
+    if runtime_cfg.visualization.execute:
+        playback = backend.visualize(runtime_cfg)
+        launch_spec = playback.get("launch_spec", launch_spec)
+        launch_spec["execute"] = True
+        _record_isaac_play_artifacts(run_dir, artifacts, backend)
+        _apply_runtime_stack_to_manifest(manifest, playback.get("runtime_stack"))
+        summary_path = write_playback_summary(
+            run_dir,
+            manifest,
+            playback,
+            "Playback diagnostics were captured from the DETB-owned Isaac Lab runner.",
+        )
+        artifacts.append(ArtifactRecord("markdown", summary_path.name, "Playback diagnostics summary"))
+        return_code = int(launch_spec.get("return_code", 0))
     else:
         return_code = 0
+        (run_dir / "summary.md").write_text(
+            "\n".join(
+                [
+                    f"# DETB Visualization Launch: {manifest.run_id}",
+                    "",
+                    "This command delegates to the pinned Isaac Lab playback runtime.",
+                    f"- Execute: `{runtime_cfg.visualization.execute}`",
+                    f"- Task: `{runtime_cfg.task.command}`",
+                    f"- Command file: `visualize_command.json`",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        artifacts.append(ArtifactRecord("markdown", "summary.md", "Visualization launch summary"))
     launch_spec["return_code"] = return_code
     write_json(run_dir / "visualize_command.json", launch_spec)
-    (run_dir / "summary.md").write_text(
-        "\n".join(
-            [
-                f"# DETB Visualization Launch: {manifest.run_id}",
-                "",
-                "This command delegates to the pinned Isaac Lab GUI runtime.",
-                f"- Execute: `{visual_cfg.visualization.execute}`",
-                f"- Task: `{visual_cfg.task.command}`",
-                f"- Command file: `visualize_command.json`",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    artifacts.extend(
-        [
-            ArtifactRecord("json", "visualize_command.json", "Isaac Lab playback launch specification"),
-            ArtifactRecord("markdown", "summary.md", "Visualization launch summary"),
-        ]
-    )
-    return _finalize_run(visual_cfg, run_dir, manifest, artifacts)
+    artifacts.append(ArtifactRecord("json", "visualize_command.json", "Isaac Lab playback launch specification"))
+    return _finalize_run(runtime_cfg, run_dir, manifest, artifacts)
 
 
 def run_train_gui(cfg) -> CommandResult:
@@ -713,6 +724,23 @@ def _record_isaac_eval_artifacts(run_dir: Path, manifest: RunManifest, artifacts
                 artifacts.append(ArtifactRecord("json", path.name, f"Isaac Lab evaluation payload for seed {seed_run['seed']}"))
             else:
                 artifacts.append(ArtifactRecord("log", path.name, f"Isaac Lab evaluation log for seed {seed_run['seed']}"))
+
+
+def _record_isaac_play_artifacts(run_dir: Path, artifacts: list[ArtifactRecord], backend: IsaacLabBackend) -> None:
+    metadata = backend.last_play_metadata or {}
+    if metadata:
+        write_json(run_dir / "isaac_play_runs.json", metadata)
+        artifacts.append(ArtifactRecord("json", "isaac_play_runs.json", "Isaac Lab playback run metadata"))
+
+    for name, artifact_type, description in (
+        ("isaac_play_result.json", "json", "Isaac Lab playback diagnostics payload"),
+        ("playback_telemetry.csv", "csv", "Playback telemetry samples"),
+        ("isaac_play_stdout.log", "log", "Isaac Lab playback stdout log"),
+        ("isaac_play_stderr.log", "log", "Isaac Lab playback stderr log"),
+        ("isaac_play_debug.log", "log", "Isaac Lab playback stage debug log"),
+    ):
+        if (run_dir / name).exists():
+            artifacts.append(ArtifactRecord(artifact_type, name, description))
 
 
 def _apply_runtime_stack_to_manifest(manifest: RunManifest, runtime_stack: dict | None) -> None:

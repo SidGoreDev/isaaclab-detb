@@ -21,7 +21,7 @@ from detb.extension import (
     robot_asset_id,
     robot_spec_for_id,
 )
-from detb.io import read_json
+from detb.io import read_json, write_json
 from detb.models import EpisodeMetric
 
 
@@ -34,6 +34,7 @@ class IsaacLabBackend:
         self.cfg = cfg
         self.last_train_metadata: dict[str, Any] | None = None
         self.last_eval_metadata: dict[str, Any] | None = None
+        self.last_play_metadata: dict[str, Any] | None = None
 
     @staticmethod
     def repo_root() -> Path:
@@ -100,6 +101,10 @@ class IsaacLabBackend:
     @classmethod
     def _eval_script_path(cls, cfg) -> Path:
         return cls._resolve_path(str(cfg.execution.isaaclab_eval_script))
+
+    @classmethod
+    def _play_script_path(cls, cfg) -> Path:
+        return cls._resolve_path(str(cfg.execution.isaaclab_play_script))
 
     @staticmethod
     def _sanitize_name(value: str) -> str:
@@ -169,29 +174,90 @@ class IsaacLabBackend:
             )
 
     @classmethod
-    def build_visualize_command(cls, cfg) -> tuple[list[str], Path]:
+    def build_visualize_command(
+        cls,
+        cfg,
+        *,
+        output_json: Path | None = None,
+        telemetry_csv: Path | None = None,
+        video_dir: Path | None = None,
+    ) -> tuple[list[str], Path]:
         root = cls.root_path(cfg)
         python_exe = cls._python_executable(cfg)
-        bootstrap_script = cls._bootstrap_script_path()
-        script = root / "scripts" / "reinforcement_learning" / "rsl_rl" / "play.py"
+        script = cls._play_script_path(cfg)
         task_name = resolve_play_task_id(cfg)
+        train_task_name = resolve_train_task_id(cfg)
         cls._assert_supported_real_cfg(cfg)
         cls._assert_task_matches_robot(task_name, cfg)
+        runtime_run_dir = getattr(cfg.execution, "detb_run_dir", "")
+        preview_root = Path(str(runtime_run_dir)).resolve() if runtime_run_dir else cls.repo_root() / ".detb_preview" / "visualize"
+        resolved_output_json = output_json or (preview_root / "isaac_play_result.json")
+        resolved_telemetry_csv = telemetry_csv or (preview_root / "playback_telemetry.csv")
+        resolved_video_dir = video_dir or (preview_root / "videos" / "play")
         command = [
             str(python_exe),
-            str(bootstrap_script),
             str(script),
             "--task",
             task_name,
             "--num_envs",
             str(cfg.visualization.num_envs),
+            "--seed",
+            str(int(cfg.execution.seeds[0])),
             "--device",
             str(cfg.execution.device),
+            "--log_root",
+            str(cls.log_root_path(cfg)),
+            "--experiment_name",
+            experiment_name(cfg, train_task_name),
+            "--output_json",
+            str(resolved_output_json),
+            "--telemetry_csv",
+            str(resolved_telemetry_csv),
+            "--video_dir",
+            str(resolved_video_dir),
+            "--rollout_steps",
+            str(cfg.visualization.rollout_steps),
+            "--robot_asset_id",
+            robot_asset_id(cfg),
+            "--robot_actuator_profile",
+            robot_actuator_profile(cfg),
+            "--sensor_profile",
+            str(cfg.sensor.name),
+            "--terrain_name",
+            str(cfg.terrain.name),
+            "--terrain_level",
+            str(cfg.terrain.level),
+            "--fault_class",
+            str(cfg.fault.class_name),
+            "--fault_severity",
+            str(cfg.fault.severity),
+            "--latency_steps",
+            str(cfg.fault.latency_steps),
+            "--success_distance_m",
+            str(cfg.task.success_distance_m),
+            "--body_mass_kg",
+            str(cfg.robot.body_mass_kg),
+            "--torque_limit_scale",
+            str(cfg.robot.torque_limit_scale),
+            "--leg_length_scale",
+            str(cfg.robot.leg_length_scale),
+            "--stiffness",
+            str(cfg.robot.stiffness),
+            "--damping",
+            str(cfg.robot.damping),
+            "--diagnostic_min_displacement_m",
+            str(cfg.visualization.diagnostic_min_displacement_m),
+            "--diagnostic_min_path_length_m",
+            str(cfg.visualization.diagnostic_min_path_length_m),
+            "--diagnostic_fall_height_m",
+            str(cfg.visualization.diagnostic_fall_height_m),
+            "--diagnostic_min_command_speed_mps",
+            str(cfg.visualization.diagnostic_min_command_speed_mps),
         ]
         checkpoint = str(cfg.visualization.checkpoint).strip()
         load_run = str(cfg.visualization.load_run).strip()
         if checkpoint:
-            command.extend(["--checkpoint", checkpoint])
+            command.extend(["--checkpoint", str(cls._resolve_path(checkpoint))])
         elif load_run:
             command.extend(["--load_run", load_run])
         elif bool(cfg.visualization.use_pretrained_checkpoint):
@@ -203,6 +269,72 @@ class IsaacLabBackend:
         if bool(cfg.visualization.headless):
             command.append("--headless")
         return command, root
+
+    def visualize(self, cfg) -> dict[str, Any]:
+        run_dir = self._runtime_run_dir(cfg)
+        result_json = run_dir / "isaac_play_result.json"
+        telemetry_csv = run_dir / "playback_telemetry.csv"
+        stdout_path = run_dir / "isaac_play_stdout.log"
+        stderr_path = run_dir / "isaac_play_stderr.log"
+        video_dir = run_dir / "videos" / "play"
+        command, cwd = self.build_visualize_command(
+            cfg,
+            output_json=result_json,
+            telemetry_csv=telemetry_csv,
+            video_dir=video_dir,
+        )
+        timeout_s = int(cfg.execution.isaaclab_timeout_s)
+        try:
+            return_code = self.run_command(
+                command,
+                cwd,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                env=self._subprocess_env(),
+                timeout_s=timeout_s,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Isaac Lab playback timed out after "
+                f"{timeout_s} seconds. See {stdout_path.name} and {stderr_path.name} in {run_dir}."
+            ) from exc
+        if return_code != 0:
+            raise RuntimeError(
+                "Isaac Lab playback failed. "
+                f"See {stdout_path.name} and {stderr_path.name} in {run_dir}."
+            )
+        if not result_json.exists():
+            raise RuntimeError(
+                "Isaac Lab playback exited without writing isaac_play_result.json. "
+                f"See {stdout_path.name} and {stderr_path.name} in {run_dir}."
+            )
+
+        payload = read_json(result_json)
+        recorded_videos = [str(path.resolve()) for path in sorted(video_dir.rglob("*.mp4"))]
+        if recorded_videos:
+            payload["video_files"] = recorded_videos
+            write_json(result_json, payload)
+        launch_spec = {
+            "mode": "isaaclab_play",
+            "cwd": str(cwd),
+            "command": command,
+            "stdout_log": stdout_path.name,
+            "stderr_log": stderr_path.name,
+            "return_code": return_code,
+            "task": payload.get("task", resolve_play_task_id(cfg)),
+            "experiment_name": experiment_name(cfg, resolve_train_task_id(cfg)),
+            "telemetry_csv": telemetry_csv.name,
+            "video_dir": str(video_dir),
+        }
+        payload["launch_spec"] = launch_spec
+        self.last_play_metadata = launch_spec | {
+            "result_json": result_json.name,
+            "telemetry_csv": telemetry_csv.name,
+            "source_checkpoint_path": str(payload.get("checkpoint", "")),
+            "runtime_stack": payload.get("runtime_stack", {}),
+            "video_files": payload.get("video_files", []),
+        }
+        return payload
 
     @classmethod
     def build_train_gui_command(cls, cfg) -> tuple[list[str], Path]:

@@ -67,6 +67,8 @@ Builds candidate requirements from stored aggregate results and study outputs. T
 
 By default DETB writes `visualize_command.json` without launching the GUI. This keeps the exact command, task, device, and checkpoint selection reviewable before execution.
 
+When executed, DETB now records playback telemetry and diagnostics in the run directory. The key files are `isaac_play_result.json`, `playback_telemetry.csv`, `isaac_play_debug.log`, and `summary.md`. These make it possible to tell the difference between a policy that is stuck, a policy that fell, and a rollout that sampled a near-standing command.
+
 ### Train GUI
 
 `train-gui` delegates to the pinned Isaac Lab training script through the configured `execution.isaaclab_python` interpreter so DETB can show live simulator progress while training or recording video.

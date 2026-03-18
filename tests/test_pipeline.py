@@ -91,7 +91,7 @@ def test_visualization_launch_specs(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         IsaacLabBackend,
         "build_visualize_command",
-        classmethod(lambda cls, cfg: (["echo", "visualize"], tmp_path)),
+        classmethod(lambda cls, cfg, **kwargs: (["echo", "visualize"], tmp_path)),
     )
     monkeypatch.setattr(
         IsaacLabBackend,
@@ -112,6 +112,103 @@ def test_visualization_launch_specs(tmp_path: Path, monkeypatch):
     assert train_payload["mode"] == "isaaclab_train"
     assert train_payload["execute"] is False
     assert (train_gui_result.run_dir / "train_gui_command.json").exists()
+
+
+def test_visualization_execute_records_playback_artifacts(tmp_path: Path, monkeypatch):
+    def fake_visualize(self, cfg):
+        run_dir = Path(str(cfg.execution.detb_run_dir))
+        (run_dir / "isaac_play_result.json").write_text(
+            '{\n'
+            '  "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
+            '  "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
+            '  "checkpoint": "C:/checkpoint.pt",\n'
+            '  "video_files": ["C:/video.mp4"],\n'
+            '  "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},\n'
+            '  "diagnostics": {\n'
+            '    "verdict": "insufficient_motion",\n'
+            '    "net_displacement_m": 0.08,\n'
+            '    "path_length_m": 0.12,\n'
+            '    "mean_planar_speed_mps": 0.03,\n'
+            '    "mean_command_planar_speed_mps": 0.41,\n'
+            '    "initial_position_m": [0.0, 0.0, 0.55],\n'
+            '    "final_position_m": [0.08, 0.01, 0.54],\n'
+            '    "min_height_m": 0.52,\n'
+            '    "steps_completed": 40,\n'
+            '    "command_motion_expected": true\n'
+            '  }\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        (run_dir / "playback_telemetry.csv").write_text(
+            "step,sim_time_s,base_pos_x_m\n0,0.0,0.0\n1,0.02,0.01\n",
+            encoding="utf-8",
+        )
+        (run_dir / "isaac_play_stdout.log").write_text("stdout\n", encoding="utf-8")
+        (run_dir / "isaac_play_stderr.log").write_text("stderr\n", encoding="utf-8")
+        (run_dir / "isaac_play_debug.log").write_text("debug\n", encoding="utf-8")
+        self.last_play_metadata = {
+            "mode": "isaaclab_play",
+            "result_json": "isaac_play_result.json",
+            "telemetry_csv": "playback_telemetry.csv",
+            "stdout_log": "isaac_play_stdout.log",
+            "stderr_log": "isaac_play_stderr.log",
+            "return_code": 0,
+            "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
+            "video_files": ["C:/video.mp4"],
+        }
+        return {
+            "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+            "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+            "checkpoint": "C:/checkpoint.pt",
+            "video_files": ["C:/video.mp4"],
+            "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
+            "diagnostics": {
+                "verdict": "insufficient_motion",
+                "net_displacement_m": 0.08,
+                "path_length_m": 0.12,
+                "mean_planar_speed_mps": 0.03,
+                "mean_command_planar_speed_mps": 0.41,
+                "initial_position_m": [0.0, 0.0, 0.55],
+                "final_position_m": [0.08, 0.01, 0.54],
+                "min_height_m": 0.52,
+                "steps_completed": 40,
+                "command_motion_expected": True,
+            },
+            "launch_spec": {
+                "mode": "isaaclab_play",
+                "cwd": str(tmp_path),
+                "command": ["echo", "visualize"],
+                "stdout_log": "isaac_play_stdout.log",
+                "stderr_log": "isaac_play_stderr.log",
+                "return_code": 0,
+                "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+                "experiment_name": "detb_anymal_c_flat",
+                "telemetry_csv": "playback_telemetry.csv",
+                "video_dir": str(run_dir / "videos" / "play"),
+            },
+        }
+
+    monkeypatch.setattr(
+        IsaacLabBackend,
+        "build_visualize_command",
+        classmethod(lambda cls, cfg, **kwargs: (["echo", "visualize"], tmp_path)),
+    )
+    monkeypatch.setattr(IsaacLabBackend, "visualize", fake_visualize)
+
+    visualize_result = run_visualize(_cfg(tmp_path, "visualization.execute=true"))
+
+    command_payload = read_json(visualize_result.run_dir / "visualize_command.json")
+    artifact_payload = read_json(visualize_result.run_dir / "artifact_registry.json")
+    summary_text = (visualize_result.run_dir / "summary.md").read_text(encoding="utf-8")
+    artifact_paths = {item["relative_path"] for item in artifact_payload}
+
+    assert command_payload["execute"] is True
+    assert command_payload["telemetry_csv"] == "playback_telemetry.csv"
+    assert "isaac_play_result.json" in artifact_paths
+    assert "playback_telemetry.csv" in artifact_paths
+    assert "isaac_play_debug.log" in artifact_paths
+    assert "isaac_play_runs.json" in artifact_paths
+    assert "Verdict: `insufficient_motion`" in summary_text
 
 
 def test_study_tier_requires_minimum_eval_episodes(tmp_path: Path):

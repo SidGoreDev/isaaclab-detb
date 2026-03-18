@@ -28,6 +28,7 @@ execution:
   isaaclab_version: "2.3.0"
   isaaclab_root: "../IsaacLab-5.1"
   isaaclab_log_root: "outputs/isaaclab_logs/rsl_rl"
+  isaaclab_play_script: "scripts/detb_isaaclab_play.py"
   isaaclab_train_script: "scripts/detb_isaaclab_train.py"
   isaaclab_eval_script: "scripts/detb_isaaclab_eval.py"
   isaaclab_python: "C:/Users/sidma/miniconda3/envs/isaaclab51/python.exe"
@@ -43,6 +44,11 @@ visualization:
   train_execute: false
   headless: false
   num_envs: 16
+  rollout_steps: 400
+  diagnostic_min_displacement_m: 0.75
+  diagnostic_min_path_length_m: 1.50
+  diagnostic_fall_height_m: 0.25
+  diagnostic_min_command_speed_mps: 0.10
   train_num_envs: 64
   train_max_iterations: 300
   train_seed: 11

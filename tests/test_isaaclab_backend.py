@@ -40,12 +40,14 @@ def test_build_visualize_command_uses_python_runner(tmp_path: Path):
 
     assert cwd == (tmp_path / "isaaclab-root").resolve()
     assert command[0].endswith("python.exe")
-    assert command[1].endswith("run_with_detb_lab.py")
-    assert command[2].endswith("play.py")
+    assert command[1].endswith("detb_isaaclab_play.py")
     assert "--task" in command
     assert "DETB-Velocity-Flat-Anymal-C-Play-v0" in command
     assert "--device" in command
     assert "cuda:0" in command
+    assert "--output_json" in command
+    assert "--telemetry_csv" in command
+    assert "--rollout_steps" in command
     assert "--use_pretrained_checkpoint" in command
     assert "--real-time" in command
 
@@ -164,6 +166,58 @@ def test_evaluate_reads_seed_payloads(tmp_path: Path, monkeypatch):
     assert backend.last_eval_metadata["source_checkpoint_path"] == str(checkpoint_path)
     assert len(backend.last_eval_metadata["seed_runs"]) == 3
 
+
+def test_visualize_reads_result_metadata_and_logs(tmp_path: Path, monkeypatch):
+    cfg, run_dir = _runtime_cfg(tmp_path)
+    backend = IsaacLabBackend(cfg)
+
+    def fake_run(command, cwd, **kwargs):
+        (run_dir / "isaac_play_stdout.log").write_text("stdout\n", encoding="utf-8")
+        (run_dir / "isaac_play_stderr.log").write_text("stderr\n", encoding="utf-8")
+        (run_dir / "isaac_play_debug.log").write_text("debug\n", encoding="utf-8")
+        (run_dir / "playback_telemetry.csv").write_text(
+            "step,sim_time_s,base_pos_x_m\n0,0.0,0.0\n1,0.02,0.15\n",
+            encoding="utf-8",
+        )
+        (run_dir / "videos" / "play").mkdir(parents=True, exist_ok=True)
+        (run_dir / "videos" / "play" / "rl-video-step-0.mp4").write_text("video", encoding="utf-8")
+        result_path = run_dir / "isaac_play_result.json"
+        result_path.write_text(
+            '{\n'
+            '  "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
+            '  "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
+            f'  "checkpoint": "{(tmp_path / "baseline_policy.pt").as_posix()}",\n'
+            '  "video_files": [\n'
+            f'    "{(run_dir / "videos" / "play" / "rl-video-step-0.mp4").as_posix()}"\n'
+            '  ],\n'
+            '  "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},\n'
+            '  "diagnostics": {\n'
+            '    "verdict": "locomoting",\n'
+            '    "net_displacement_m": 1.25,\n'
+            '    "path_length_m": 1.42,\n'
+            '    "mean_planar_speed_mps": 0.61,\n'
+            '    "mean_command_planar_speed_mps": 0.74,\n'
+            '    "initial_position_m": [0.0, 0.0, 0.55],\n'
+            '    "final_position_m": [1.25, 0.05, 0.54],\n'
+            '    "min_height_m": 0.51,\n'
+            '    "steps_completed": 50,\n'
+            '    "command_motion_expected": true\n'
+            '  }\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        return 0
+
+    monkeypatch.setattr(IsaacLabBackend, "run_command", staticmethod(fake_run))
+
+    payload = backend.visualize(cfg)
+
+    assert payload["diagnostics"]["verdict"] == "locomoting"
+    assert payload["launch_spec"]["stdout_log"] == "isaac_play_stdout.log"
+    assert backend.last_play_metadata is not None
+    assert backend.last_play_metadata["telemetry_csv"] == "playback_telemetry.csv"
+    assert len(backend.last_play_metadata["video_files"]) == 1
+
 def test_train_command_passes_repo_local_log_root(tmp_path: Path):
     cfg, _ = _runtime_cfg(tmp_path)
     command, cwd = IsaacLabBackend._train_command(cfg, tmp_path / 'result.json')
@@ -181,6 +235,16 @@ def test_task_command_falls_back_when_registry_id_missing(tmp_path: Path):
     command, _ = IsaacLabBackend.build_visualize_command(cfg)
 
     assert "Isaac-Velocity-Flat-Anymal-C-Play-v0" in command
+
+
+def test_visualize_command_resolves_explicit_checkpoint_path(tmp_path: Path):
+    checkpoint = tmp_path / "outputs" / "baseline_policy.pt"
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_text("checkpoint", encoding="utf-8")
+    cfg = _cfg(tmp_path, f"visualization.checkpoint={checkpoint.as_posix()}", "visualization.use_pretrained_checkpoint=false")
+    command, _ = IsaacLabBackend.build_visualize_command(cfg)
+
+    assert command[command.index("--checkpoint") + 1] == str(checkpoint.resolve())
 
 
 def test_stability_task_uses_detb_registry_ids(tmp_path: Path):

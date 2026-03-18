@@ -112,7 +112,7 @@ Each major run writes to `outputs/<command>/<run_id>/` and includes:
 - reviewable markdown summary
 - lightweight SVG plots where applicable
 
-GUI commands also emit launch-spec JSON files so the exact Isaac Lab invocation is reviewable before execution.
+GUI commands also emit launch-spec JSON files so the exact Isaac Lab invocation is reviewable before execution. Executed `visualize` runs now persist `isaac_play_result.json`, `playback_telemetry.csv`, playback logs, and any recorded `videos/play/*.mp4` files in the same run directory.
 
 ## Repository Layout
 

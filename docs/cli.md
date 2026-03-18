@@ -52,11 +52,24 @@ Runs the configured fault sweep and detects the first critical severity threshol
 
 Builds the Isaac Lab playback command using the configured `execution.isaaclab_python` interpreter against the pinned `..\IsaacLab-5.1` checkout. By default it emits a launch spec without execution. Set `--set visualization.execute=true` to actually launch the GUI playback path.
 
+When executed, the run directory records playback diagnostics instead of only a video:
+
+- `visualize_command.json`
+- `isaac_play_result.json`
+- `playback_telemetry.csv`
+- `isaac_play_stdout.log`
+- `isaac_play_stderr.log`
+- `isaac_play_debug.log`
+- `summary.md`
+- `videos/play/*.mp4` when `visualization.video=true`
+
 Useful overrides:
 
 - `--set visualization.load_run=<run_name>` to replay a specific Isaac Lab run.
 - `--set visualization.checkpoint=<path>` to load an explicit checkpoint.
 - `--set visualization.video=true` to request Isaac Lab video capture.
+- `--set visualization.rollout_steps=<n>` to extend or shorten the diagnostic rollout.
+- `--set visualization.diagnostic_min_displacement_m=<value>` to adjust the pass/fail motion threshold.
 
 ### `detb train-gui`
 

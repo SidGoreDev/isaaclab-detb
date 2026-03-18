@@ -133,6 +133,41 @@ def write_requirements_markdown(run_dir: Path, requirements: list[RequirementRec
     return path
 
 
+def write_playback_summary(run_dir: Path, manifest: RunManifest, playback: dict, note: str) -> Path:
+    """Write a reviewable playback diagnostics summary."""
+    diagnostics = playback.get("diagnostics", {})
+    initial_position = diagnostics.get("initial_position_m", ["?", "?", "?"])
+    final_position = diagnostics.get("final_position_m", ["?", "?", "?"])
+    video_files = playback.get("video_files", [])
+    lines = [
+        f"# DETB Playback Summary: {manifest.run_id}",
+        "",
+        f"- Command: `{manifest.command}`",
+        f"- Backend: `{manifest.backend}`",
+        f"- Task: `{playback.get('task_registry_id', manifest.task_registry_id)}`",
+        f"- Robot: `{manifest.robot_variant}`",
+        f"- Verdict: `{diagnostics.get('verdict', 'unknown')}`",
+        f"- Motion expected from command: `{diagnostics.get('command_motion_expected', False)}`",
+        f"- Net displacement (m): `{diagnostics.get('net_displacement_m', 0.0)}`",
+        f"- Path length (m): `{diagnostics.get('path_length_m', 0.0)}`",
+        f"- Mean planar speed (m/s): `{diagnostics.get('mean_planar_speed_mps', 0.0)}`",
+        f"- Mean commanded planar speed (m/s): `{diagnostics.get('mean_command_planar_speed_mps', 0.0)}`",
+        f"- Initial position (m): `{initial_position}`",
+        f"- Final position (m): `{final_position}`",
+        f"- Minimum height (m): `{diagnostics.get('min_height_m', 0.0)}`",
+        f"- Steps completed: `{diagnostics.get('steps_completed', 0)}`",
+        f"- Video files: `{len(video_files)}`",
+        "",
+        "## Notes",
+        "",
+        note,
+        "",
+    ]
+    path = run_dir / "summary.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def rebuild_summary(run_dir: Path) -> Path:
     """Rebuild summary markdown from stored aggregate metrics."""
     manifest = RunManifest(**read_json(run_dir / "run_manifest.json"))

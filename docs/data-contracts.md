@@ -2,6 +2,14 @@
 
 DETB uses explicit persisted records so every run can be reconstructed from artifacts alone.
 
+For `visualize` runs, the minimum practical playback diagnostics set is:
+
+- `visualize_command.json`
+- `isaac_play_result.json`
+- `playback_telemetry.csv`
+- `summary.md`
+- playback stdout, stderr, and debug logs when execution occurs
+
 ## RunManifest
 
 Required fields:
@@ -98,3 +106,4 @@ Required fields:
 - Candidate requirements default to `candidate` status.
 - Requirement generation must operate from stored artifacts rather than hidden in-memory state.
 - Artifact file names should remain stable across commands so they can be consumed by later analysis.
+- Playback telemetry should include robot base position and commanded motion so visual inspection can be checked against machine-readable diagnostics.
