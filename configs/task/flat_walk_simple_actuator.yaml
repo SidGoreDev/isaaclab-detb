@@ -1,0 +1,5 @@
+family: locomotion
+name: flat_walk_simple_actuator
+registry_id: DETB-Velocity-Flat-Anymal-C-SimpleActuator-v0
+command: Isaac-Velocity-Flat-Anymal-C-v0
+success_distance_m: 8.0

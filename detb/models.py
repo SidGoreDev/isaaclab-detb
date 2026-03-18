@@ -26,6 +26,19 @@ class RunManifest:
     backend: str
     checkpoint_path: str
     config_snapshot_path: str
+    git_dirty: bool = False
+    isaaclab_git_commit: str = "unknown"
+    isaaclab_git_dirty: bool = False
+    detb_lab_version: str = "unknown"
+    torch_version: str = "unknown"
+    cuda_version: str = "unknown"
+    rsl_rl_version: str = "unknown"
+    robot_asset_id: str = "unknown"
+    robot_actuator_profile: str = "unknown"
+    task_registry_id: str = ""
+    run_tier: str = "smoke"
+    configured_eval_episodes: int = 0
+    configured_train_max_iterations: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

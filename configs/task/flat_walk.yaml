@@ -1,4 +1,5 @@
 family: locomotion
 name: flat_walk
+registry_id: DETB-Velocity-Flat-Anymal-C-v0
 command: Isaac-Velocity-Flat-Anymal-C-v0
 success_distance_m: 8.0

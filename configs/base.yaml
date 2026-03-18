@@ -14,16 +14,57 @@ app:
 
 execution:
   backend: mock
+  run_tier: smoke
   output_root: outputs
   headless: true
   num_envs: 64
+  eval_num_envs: 1
   train_steps: 512
+  train_max_iterations: 300
   eval_episodes: 8
   seeds: [11, 22, 33]
   checkpoint_name: baseline_policy.pt
   isaac_sim_version: "5.1.0"
   isaaclab_version: "2.3.0"
   isaaclab_root: "../IsaacLab-5.1"
+  isaaclab_log_root: "outputs/isaaclab_logs/rsl_rl"
+  isaaclab_train_script: "scripts/detb_isaaclab_train.py"
+  isaaclab_eval_script: "scripts/detb_isaaclab_eval.py"
+  isaaclab_python: "C:/Users/sidma/miniconda3/envs/isaaclab51/python.exe"
+  isaaclab_timeout_s: 10800
+  experiment_name: ""
+  load_run: ""
+  checkpoint: ""
+  device: cuda:0
+  gpu_index: 0
+
+visualization:
+  execute: false
+  train_execute: false
+  headless: false
+  num_envs: 16
+  train_num_envs: 64
+  train_max_iterations: 300
+  train_seed: 11
+  real_time: true
+  video: false
+  video_length: 400
+  video_interval: 2000
+  use_pretrained_checkpoint: true
+  load_run: ""
+  checkpoint: ""
+
+objective:
+  success_weight: 1.0
+  energy_weight: 0.15
+  elapsed_weight: 0.05
+  terrain_weight: 0.35
+  robustness_weight: 0.25
+  target_success_rate: 0.85
+  target_tgs: 0.70
+  target_failure_threshold: 0.30
+  target_elapsed_time_s: 24.0
+  candidate_limit: 5
 
 logging:
   write_svg_plots: true

@@ -1,0 +1,10 @@
+name: anymal_c_simple_actuator
+asset_id: detb.anymal_c_simple_actuator
+asset_family: quadruped
+asset_reference: DETB ANYmal-C simple actuator profile
+actuator_profile: dc_motor
+leg_length_scale: 1.0
+body_mass_kg: 32.0
+torque_limit_scale: 1.0
+stiffness: 40.0
+damping: 5.0

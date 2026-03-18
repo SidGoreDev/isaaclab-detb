@@ -9,6 +9,9 @@ from detb.pipeline import (
     run_sweep,
     run_terrain_eval,
     run_train,
+    run_train_gui,
+    run_tune,
+    run_visualize,
 )
 
 __all__ = [
@@ -20,4 +23,7 @@ __all__ = [
     "run_sweep",
     "run_terrain_eval",
     "run_train",
+    "run_train_gui",
+    "run_tune",
+    "run_visualize",
 ]

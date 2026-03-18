@@ -1,0 +1,5 @@
+family: locomotion
+name: flat_walk_stability
+registry_id: DETB-Velocity-Flat-Anymal-C-Stability-v0
+command: Isaac-Velocity-Flat-Anymal-C-v0
+success_distance_m: 7.0

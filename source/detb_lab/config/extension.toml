@@ -1,0 +1,8 @@
+[package]
+version = "0.1.0"
+title = "DETB Lab"
+description = "External Isaac Lab extension for DETB tasks and robot configs."
+category = "Simulation"
+
+[[python.module]]
+name = "detb_lab"

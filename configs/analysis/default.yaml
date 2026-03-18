@@ -1,6 +1,8 @@
 confidence_z: 1.96
 success_requirement_threshold: 0.80
 tgs_requirement_threshold: 0.65
+minimum_study_seeds: 3
+minimum_study_eval_episodes: 10
 sensor_profiles: [proprio, raycaster, depth_forward]
 terrain_profiles: [flat_eval, gentle_slopes, rough, stairs, mixed_obstacles]
 failure_profile: torque_derate

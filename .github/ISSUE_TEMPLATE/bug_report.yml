@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a problem with DETB behavior or artifacts
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Include commands, config overrides, and observed outputs.
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifact impact
+      description: Which manifest, metrics, or reports were affected?
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Python, OS, backend, Isaac versions if relevant.
