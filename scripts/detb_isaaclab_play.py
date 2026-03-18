@@ -65,7 +65,12 @@ from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
 import isaaclab_tasks  # noqa: F401
 
-from detb_isaaclab_common import apply_fault_to_actions, prepare_cfgs, validate_supported_configuration
+from detb_isaaclab_common import (
+    apply_fault_to_actions,
+    prepare_cfgs,
+    resolve_pretrained_checkpoint_task_name,
+    validate_supported_configuration,
+)
 
 
 def _debug_log_path(output_json: str) -> Path:
@@ -103,7 +108,6 @@ def _latest_checkpoint(log_dir: Path) -> Path:
 
 def _resolve_checkpoint() -> Path:
     task_name = args.task.split(":")[-1]
-    train_task_name = task_name.replace("-Play", "")
 
     if args.checkpoint:
         raw_path = Path(args.checkpoint).expanduser()
@@ -115,9 +119,14 @@ def _resolve_checkpoint() -> Path:
         return Path(str(retrieve_file_path(args.checkpoint))).resolve()
 
     if args.use_pretrained_checkpoint:
-        published = get_published_pretrained_checkpoint("rsl_rl", train_task_name)
+        pretrained_task_name = resolve_pretrained_checkpoint_task_name(task_name)
+        published = get_published_pretrained_checkpoint("rsl_rl", pretrained_task_name)
         if published:
             return Path(str(published)).resolve()
+        raise FileNotFoundError(
+            "A published pretrained checkpoint is not available for "
+            f"'{task_name}' (resolved pretrained source '{pretrained_task_name}')."
+        )
 
     experiment_root = Path(args.log_root).expanduser().resolve() / args.experiment_name
     if not experiment_root.exists():

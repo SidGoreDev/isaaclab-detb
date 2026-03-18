@@ -4,7 +4,7 @@ from detb.extension import ensure_detb_lab_on_path
 def test_detb_lab_registry_metadata_is_available():
     ensure_detb_lab_on_path()
 
-    from detb_lab.registry import robot_spec_for_id, spec_for_task_id
+    from detb_lab.registry import published_pretrained_task_id_for_task, robot_spec_for_id, spec_for_task_id
 
     spec = spec_for_task_id("DETB-Velocity-Flat-Anymal-C-v0")
     robot = robot_spec_for_id("detb.anymal_c")
@@ -17,6 +17,7 @@ def test_detb_lab_registry_metadata_is_available():
     assert robot is not None
     assert robot.actuator_profile == "actuator_net"
     assert robot.cfg_entry_point == "detb_lab.assets.robots.anymal_c:DETB_ANYMAL_C_CFG"
+    assert published_pretrained_task_id_for_task("DETB-Velocity-Flat-Anymal-C-Play-v0") == "Isaac-Velocity-Flat-Anymal-C-v0"
 
 
 def test_stability_task_registry_metadata_is_available():
@@ -34,7 +35,7 @@ def test_stability_task_registry_metadata_is_available():
 def test_simple_actuator_robot_and_task_metadata_are_available():
     ensure_detb_lab_on_path()
 
-    from detb_lab.registry import robot_spec_for_id, spec_for_task_id
+    from detb_lab.registry import published_pretrained_task_id_for_task, robot_spec_for_id, spec_for_task_id
 
     spec = spec_for_task_id("DETB-Velocity-Flat-Anymal-C-SimpleActuator-v0")
     robot = robot_spec_for_id("detb.anymal_c_simple_actuator")
@@ -46,3 +47,7 @@ def test_simple_actuator_robot_and_task_metadata_are_available():
     assert robot.actuator_profile == "dc_motor"
     assert robot.baseline_stiffness == 40.0
     assert robot.baseline_damping == 5.0
+    assert (
+        published_pretrained_task_id_for_task("DETB-Velocity-Flat-Anymal-C-SimpleActuator-Play-v0")
+        == "DETB-Velocity-Flat-Anymal-C-SimpleActuator-v0"
+    )

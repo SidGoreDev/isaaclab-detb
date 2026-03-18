@@ -64,6 +64,8 @@ detb visualize --set visualization.execute=true
 detb train-gui --set visualization.train_execute=true
 ```
 
+For the baseline `task=flat_walk` path, `visualization.use_pretrained_checkpoint=true` now resolves to the upstream Isaac Lab ANYmal-C pretrained checkpoint. DETB-only task variants without a published upstream equivalent fail fast instead of silently replaying the latest local smoke checkpoint.
+
 Tune against the design sweep and adjust objective weights or thresholds directly from the CLI:
 
 ```powershell

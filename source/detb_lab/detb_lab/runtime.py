@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from detb_lab.registry import robot_spec_for_id, spec_for_task_id
+from detb_lab.registry import published_pretrained_task_id_for_task, robot_spec_for_id, spec_for_task_id
 
 BASELINE_BODY_MASS_KG = 32.0
 BASELINE_LEG_SCALE = 1.0
@@ -37,6 +37,10 @@ def resolve_experiment_name(task_name: str, terrain_level: int = 0, override: st
     if "Rough-Anymal-C" in task_name:
         return "detb_anymal_c_rough"
     return task_name.replace(":", "_").replace("/", "_").replace("-", "_").lower()
+
+
+def resolve_pretrained_checkpoint_task_name(task_name: str) -> str:
+    return published_pretrained_task_id_for_task(task_name.split(":")[-1])
 
 
 def validate_supported_configuration(

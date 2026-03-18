@@ -26,6 +26,7 @@ from detb_lab.runtime import (  # noqa: E402
     fault_delay_steps,
     load_task_cfgs,
     prepare_cfgs,
+    resolve_pretrained_checkpoint_task_name,
     resolve_experiment_name,
     validate_supported_configuration,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "fault_delay_steps",
     "load_task_cfgs",
     "prepare_cfgs",
+    "resolve_pretrained_checkpoint_task_name",
     "resolve_experiment_name",
     "validate_supported_configuration",
 ]

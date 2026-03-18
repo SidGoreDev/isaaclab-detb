@@ -71,6 +71,11 @@ Useful overrides:
 - `--set visualization.rollout_steps=<n>` to extend or shorten the diagnostic rollout.
 - `--set visualization.diagnostic_min_displacement_m=<value>` to adjust the pass/fail motion threshold.
 
+Behavior note:
+
+- On the baseline DETB ANYmal-C task family, `visualization.use_pretrained_checkpoint=true` resolves to the upstream Isaac Lab published ANYmal-C checkpoint.
+- On DETB-only task families without a published upstream equivalent, requesting a pretrained checkpoint now fails explicitly instead of silently falling back to the latest local smoke run.
+
 ### `detb train-gui`
 
 Builds the Isaac Lab GUI training command using the configured `execution.isaaclab_python` interpreter against the pinned `..\IsaacLab-5.1` checkout. By default it emits a launch spec without execution. Set `--set visualization.train_execute=true` to actually launch live training.

@@ -22,6 +22,8 @@ class TaskSpec:
     flat_experiment_name: str
     rough_experiment_name: str
     robot_asset_id: str
+    published_flat_train_registry_id: str = ""
+    published_rough_train_registry_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,8 @@ TASK_SPECS: dict[str, TaskSpec] = {
         flat_experiment_name="detb_anymal_c_flat",
         rough_experiment_name="detb_anymal_c_rough",
         robot_asset_id="detb.anymal_c",
+        published_flat_train_registry_id="Isaac-Velocity-Flat-Anymal-C-v0",
+        published_rough_train_registry_id="Isaac-Velocity-Rough-Anymal-C-v0",
     ),
     "velocity_anymal_c_stability": TaskSpec(
         key="velocity_anymal_c_stability",
@@ -186,6 +190,17 @@ def spec_for_task_id(task_id: str) -> TaskSpec | None:
 
 def robot_spec_for_id(asset_id: str) -> RobotSpec | None:
     return ROBOT_SPECS.get(asset_id)
+
+
+def published_pretrained_task_id_for_task(task_id: str) -> str:
+    spec = spec_for_task_id(task_id)
+    if spec is None:
+        return task_id.replace("-Play", "")
+    if task_id in {spec.flat_train_registry_id, spec.flat_play_registry_id}:
+        return spec.published_flat_train_registry_id or spec.flat_train_registry_id
+    if task_id in {spec.rough_train_registry_id, spec.rough_play_registry_id}:
+        return spec.published_rough_train_registry_id or spec.rough_train_registry_id
+    return task_id.replace("-Play", "")
 
 
 def register_all_tasks() -> None:
