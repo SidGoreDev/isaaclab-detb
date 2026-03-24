@@ -103,10 +103,20 @@ def apply_common_overrides(
     env_cfg.scene.num_envs = int(num_envs)
     env_cfg.seed = int(seed)
     env_cfg.sim.device = str(device)
+    commands_cfg = getattr(env_cfg, "commands", None)
+    if commands_cfg is not None:
+        base_velocity_cfg = getattr(commands_cfg, "base_velocity", None)
+        if base_velocity_cfg is not None and hasattr(base_velocity_cfg, "debug_vis"):
+            base_velocity_cfg.debug_vis = False
     agent_cfg.seed = int(seed)
     agent_cfg.device = str(device)
     agent_cfg.experiment_name = str(experiment_name)
     agent_cfg.run_name = str(run_name)
+    if hasattr(agent_cfg, "obs_groups"):
+        agent_cfg.obs_groups = {
+            "policy": ["policy"],
+            "critic": ["policy"],
+        }
     if max_iterations is not None:
         agent_cfg.max_iterations = int(max_iterations)
 

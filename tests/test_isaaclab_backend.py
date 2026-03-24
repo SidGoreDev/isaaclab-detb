@@ -49,8 +49,17 @@ def test_build_visualize_command_uses_python_runner(tmp_path: Path):
     assert "--telemetry_csv" in command
     assert "--rollout_steps" in command
     assert "--use_pretrained_checkpoint" in command
-    assert "--real-time" in command
+    assert "--real_time" in command
 
+
+
+def test_build_visualize_command_adds_gui_kit_args(tmp_path: Path, monkeypatch):
+    cfg = _cfg(tmp_path)
+    monkeypatch.setattr(IsaacLabBackend, "_default_gui_kit_args", staticmethod(lambda *, headless: "--/app/vulkan=false"))
+
+    command, _ = IsaacLabBackend.build_visualize_command(cfg)
+
+    assert "--kit_args=--/app/vulkan=false" in command
 
 
 def test_build_train_gui_command_includes_video_controls(tmp_path: Path):
@@ -70,6 +79,15 @@ def test_build_train_gui_command_includes_video_controls(tmp_path: Path):
     assert "--video_length" in command
     assert "--video_interval" in command
 
+
+
+def test_build_train_gui_command_merges_explicit_kit_args(tmp_path: Path, monkeypatch):
+    cfg = _cfg(tmp_path, "execution.isaaclab_kit_args='--/renderer/debug/validation/enabled=false'")
+    monkeypatch.setattr(IsaacLabBackend, "_default_gui_kit_args", staticmethod(lambda *, headless: "--/app/vulkan=false"))
+
+    command, _ = IsaacLabBackend.build_train_gui_command(cfg)
+
+    assert "--kit_args=--/app/vulkan=false --/renderer/debug/validation/enabled=false" in command
 
 
 def test_train_reads_result_metadata_and_curve(tmp_path: Path, monkeypatch):
@@ -201,7 +219,8 @@ def test_visualize_reads_result_metadata_and_logs(tmp_path: Path, monkeypatch):
             '    "final_position_m": [1.25, 0.05, 0.54],\n'
             '    "min_height_m": 0.51,\n'
             '    "steps_completed": 50,\n'
-            '    "command_motion_expected": true\n'
+            '    "command_motion_expected": true,\n'
+            '    "rollout_limit_reached": false\n'
             '  }\n'
             '}\n',
             encoding="utf-8",
@@ -213,6 +232,7 @@ def test_visualize_reads_result_metadata_and_logs(tmp_path: Path, monkeypatch):
     payload = backend.visualize(cfg)
 
     assert payload["diagnostics"]["verdict"] == "locomoting"
+    assert payload["diagnostics"]["rollout_limit_reached"] is False
     assert payload["launch_spec"]["stdout_log"] == "isaac_play_stdout.log"
     assert backend.last_play_metadata is not None
     assert backend.last_play_metadata["telemetry_csv"] == "playback_telemetry.csv"
@@ -220,7 +240,7 @@ def test_visualize_reads_result_metadata_and_logs(tmp_path: Path, monkeypatch):
 
 def test_train_command_passes_repo_local_log_root(tmp_path: Path):
     cfg, _ = _runtime_cfg(tmp_path)
-    command, cwd = IsaacLabBackend._train_command(cfg, tmp_path / 'result.json')
+    command, cwd = IsaacLabBackend.build_train_command(cfg, tmp_path / 'result.json')
 
     assert cwd == (tmp_path / 'isaaclab-root').resolve()
     assert "DETB-Velocity-Flat-Anymal-C-v0" in command
@@ -251,7 +271,7 @@ def test_stability_task_uses_detb_registry_ids(tmp_path: Path):
     cfg = _cfg(tmp_path, "task=flat_walk_stability")
     runtime_cfg, _ = _runtime_cfg(tmp_path, "task=flat_walk_stability")
     visualize_command, _ = IsaacLabBackend.build_visualize_command(cfg)
-    train_command, _ = IsaacLabBackend._train_command(runtime_cfg, tmp_path / "result.json")
+    train_command, _ = IsaacLabBackend.build_train_command(runtime_cfg, tmp_path / "result.json")
 
     assert "DETB-Velocity-Flat-Anymal-C-Stability-Play-v0" in visualize_command
     assert "DETB-Velocity-Flat-Anymal-C-Stability-v0" in train_command
@@ -261,7 +281,7 @@ def test_simple_actuator_task_uses_matching_robot_and_registry_ids(tmp_path: Pat
     cfg = _cfg(tmp_path, "task=flat_walk_simple_actuator", "robot=anymal_c_simple_actuator")
     runtime_cfg, _ = _runtime_cfg(tmp_path, "task=flat_walk_simple_actuator", "robot=anymal_c_simple_actuator")
     visualize_command, _ = IsaacLabBackend.build_visualize_command(cfg)
-    train_command, _ = IsaacLabBackend._train_command(runtime_cfg, tmp_path / "result.json")
+    train_command, _ = IsaacLabBackend.build_train_command(runtime_cfg, tmp_path / "result.json")
 
     assert "DETB-Velocity-Flat-Anymal-C-SimpleActuator-Play-v0" in visualize_command
     assert "DETB-Velocity-Flat-Anymal-C-SimpleActuator-v0" in train_command

@@ -158,6 +158,23 @@ def _extract_policy_components(runner):
     return policy_nn, normalizer
 
 
+def _flatten_recurrent_policy_memory(policy_nn) -> None:
+    for memory_name in ("memory_a", "memory_c"):
+        memory = getattr(policy_nn, memory_name, None)
+        rnn = getattr(memory, "rnn", None)
+        if rnn is not None and hasattr(rnn, "flatten_parameters"):
+            rnn.flatten_parameters()
+
+
+def _flatten_actuator_lstm_modules(robot) -> None:
+    actuators = getattr(robot, "actuators", {})
+    for actuator in getattr(actuators, "values", lambda: [])():
+        network = getattr(actuator, "network", None)
+        lstm = getattr(network, "lstm", None)
+        if lstm is not None and hasattr(lstm, "flatten_parameters"):
+            lstm.flatten_parameters()
+
+
 def _make_runner(env, agent_cfg, checkpoint_path: Path):
     wrapper = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
     if agent_cfg.class_name == "OnPolicyRunner":
@@ -294,7 +311,9 @@ def main() -> None:
 
         policy = runner.get_inference_policy(device=env.unwrapped.device)
         policy_nn, _ = _extract_policy_components(runner)
+        _flatten_recurrent_policy_memory(policy_nn)
         robot = env.unwrapped.scene["robot"]
+        _flatten_actuator_lstm_modules(robot)
 
         obs = env.get_observations()
         root_pos = robot.data.root_pos_w[0].detach().cpu()
@@ -312,6 +331,7 @@ def main() -> None:
         fell = False
         terminated = False
         timed_out = False
+        rollout_limit_reached = False
 
         fault_history = deque()
 
@@ -351,7 +371,18 @@ def main() -> None:
             if bool(dones[0].item()):
                 terminated = bool(env.unwrapped.termination_manager.terminated[0].item())
                 timed_out = bool(env.unwrapped.termination_manager.time_outs[0].item())
-                log_stage(f"Playback rollout ended early at step {step} (terminated={terminated}, timed_out={timed_out}).")
+                rollout_limit_reached = step >= int(args.rollout_steps)
+                if timed_out and rollout_limit_reached and not terminated:
+                    timed_out = False
+                    log_stage(
+                        "Playback rollout reached the configured rollout limit "
+                        f"at step {step} (terminated={terminated}, rollout_limit_reached={rollout_limit_reached})."
+                    )
+                else:
+                    log_stage(
+                        "Playback rollout ended early "
+                        f"at step {step} (terminated={terminated}, timed_out={timed_out})."
+                    )
                 break
 
             sleep_time = float(env.unwrapped.step_dt) - (time.time() - start_time)
@@ -359,6 +390,8 @@ def main() -> None:
                 time.sleep(sleep_time)
 
         final_row = telemetry_rows[-1]
+        if int(final_row["step"]) >= int(args.rollout_steps):
+            rollout_limit_reached = True
         moved_enough = (
             float(final_row["planar_displacement_m"]) >= float(args.diagnostic_min_displacement_m)
             or path_length_m >= float(args.diagnostic_min_path_length_m)
@@ -402,6 +435,7 @@ def main() -> None:
                 "fell": fell,
                 "terminated": terminated,
                 "timed_out": timed_out,
+                "rollout_limit_reached": rollout_limit_reached,
                 "initial_position_m": [
                     round(float(telemetry_rows[0]["base_pos_x_m"]), 6),
                     round(float(telemetry_rows[0]["base_pos_y_m"]), 6),

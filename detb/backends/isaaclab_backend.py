@@ -121,6 +121,29 @@ class IsaacLabBackend:
         return cls._sanitize_name(f"detb_{cls._runtime_run_id(cfg)}")
 
     @staticmethod
+    def _default_gui_kit_args(*, headless: bool) -> str:
+        if os.name == "nt" and not headless:
+            return "--/app/vulkan=false"
+        return ""
+
+    @classmethod
+    def _effective_kit_args(cls, cfg, *, headless: bool) -> str:
+        explicit = str(getattr(cfg.execution, "isaaclab_kit_args", "")).strip()
+        fallback = cls._default_gui_kit_args(headless=headless)
+        parts: list[str] = []
+        if fallback and "/app/vulkan" not in explicit:
+            parts.append(fallback)
+        if explicit:
+            parts.append(explicit)
+        return " ".join(parts)
+
+    @classmethod
+    def _append_kit_args(cls, command: list[str], cfg, *, headless: bool) -> None:
+        kit_args = cls._effective_kit_args(cfg, headless=headless)
+        if kit_args:
+            command.append(f"--kit_args={kit_args}")
+
+    @staticmethod
     def _sensor_supported(cfg) -> None:
         if str(cfg.sensor.name) != "proprio":
             raise RuntimeError(
@@ -263,11 +286,12 @@ class IsaacLabBackend:
         elif bool(cfg.visualization.use_pretrained_checkpoint):
             command.append("--use_pretrained_checkpoint")
         if bool(cfg.visualization.real_time):
-            command.append("--real-time")
+            command.append("--real_time")
         if bool(cfg.visualization.video):
             command.extend(["--video", "--video_length", str(cfg.visualization.video_length)])
         if bool(cfg.visualization.headless):
             command.append("--headless")
+        cls._append_kit_args(command, cfg, headless=bool(cfg.visualization.headless))
         return command, root
 
     def visualize(self, cfg) -> dict[str, Any]:
@@ -372,10 +396,11 @@ class IsaacLabBackend:
             )
         if bool(cfg.visualization.headless):
             command.append("--headless")
+        cls._append_kit_args(command, cfg, headless=bool(cfg.visualization.headless))
         return command, root
 
     @classmethod
-    def _train_command(cls, cfg, output_json: Path) -> tuple[list[str], Path]:
+    def build_train_command(cls, cfg, output_json: Path) -> tuple[list[str], Path]:
         cls._assert_supported_real_cfg(cfg)
         root = cls.root_path(cfg)
         python_exe = cls._python_executable(cfg)
@@ -429,10 +454,11 @@ class IsaacLabBackend:
         ]
         if bool(cfg.execution.headless):
             command.append("--headless")
+        cls._append_kit_args(command, cfg, headless=bool(cfg.execution.headless))
         return command, root
 
     @classmethod
-    def _eval_command(cls, cfg, output_json: Path, checkpoint_path: Path, seed: int) -> tuple[list[str], Path]:
+    def build_evaluate_command(cls, cfg, output_json: Path, checkpoint_path: Path, seed: int) -> tuple[list[str], Path]:
         cls._assert_supported_real_cfg(cfg)
         root = cls.root_path(cfg)
         python_exe = cls._python_executable(cfg)
@@ -489,6 +515,7 @@ class IsaacLabBackend:
         ]
         if bool(cfg.execution.headless):
             command.append("--headless")
+        cls._append_kit_args(command, cfg, headless=bool(cfg.execution.headless))
         return command, root
 
     @classmethod
@@ -610,7 +637,7 @@ class IsaacLabBackend:
         result_json = run_dir / "isaac_train_result.json"
         stdout_path = run_dir / "isaac_train_stdout.log"
         stderr_path = run_dir / "isaac_train_stderr.log"
-        command, cwd = self._train_command(cfg, result_json)
+        command, cwd = self.build_train_command(cfg, result_json)
         timeout_s = int(cfg.execution.isaaclab_timeout_s)
         try:
             return_code = self.run_command(
@@ -697,7 +724,7 @@ class IsaacLabBackend:
             result_json = run_dir / f"isaac_eval_seed_{int(seed)}.json"
             stdout_path = run_dir / f"isaac_eval_seed_{int(seed)}_stdout.log"
             stderr_path = run_dir / f"isaac_eval_seed_{int(seed)}_stderr.log"
-            command, cwd = self._eval_command(cfg, result_json, checkpoint_path, int(seed))
+            command, cwd = self.build_evaluate_command(cfg, result_json, checkpoint_path, int(seed))
             try:
                 return_code = self.run_command(
                     command,

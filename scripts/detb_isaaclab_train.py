@@ -87,6 +87,15 @@ def _runtime_stack() -> dict[str, str]:
     }
 
 
+def _flatten_actuator_lstm_modules(robot) -> None:
+    actuators = getattr(robot, "actuators", {})
+    for actuator in getattr(actuators, "values", lambda: [])():
+        network = getattr(actuator, "network", None)
+        lstm = getattr(network, "lstm", None)
+        if lstm is not None and hasattr(lstm, "flatten_parameters"):
+            lstm.flatten_parameters()
+
+
 def main() -> None:
     debug_handle, log_stage = _make_stage_logger(args.output_json)
     env = None
@@ -135,6 +144,7 @@ def main() -> None:
         if isinstance(env.unwrapped, DirectMARLEnv):
             env = multi_agent_to_single_agent(env)
             log_stage("Converted multi-agent environment to single-agent wrapper.")
+        _flatten_actuator_lstm_modules(env.unwrapped.scene["robot"])
 
         if args.video:
             video_kwargs = {

@@ -18,7 +18,7 @@ DETB is a simulation-first design evaluation toolkit for quadruped systems engin
 
 ## Current Status
 
-The repository supports a complete `mock` backend for fast local validation and verified Isaac Lab execution paths for `train`, `evaluate`, `visualize`, and `train-gui`. Simulator-native task and robot ownership now live under `source/detb_lab`, while `detb/` remains the orchestration and evidence layer. On March 17, 2026, minimal real `train` and `evaluate` smoke runs completed through the baseline DETB ANYmal-C family, the DETB stability-focused family, and the first divergent DETB robot/profile family using the pinned `isaaclab51` Python runtime.
+The repository supports a complete `mock` backend for fast local validation and verified Isaac Lab execution paths for `train`, `evaluate`, `visualize`, and `train-gui`. Simulator-native task and robot ownership now live under `source/detb_lab`, while `detb/` remains the orchestration and evidence layer. On March 17, 2026, minimal real `train` and `evaluate` smoke runs completed through the baseline DETB ANYmal-C family, the DETB stability-focused family, and the first divergent DETB robot/profile family using the pinned `isaaclab51` Python runtime. On March 24, 2026, Windows GUI launch verification was re-established by routing GUI Kit startup through `--/app/vulkan=false`, which avoids the Vulkan startup crash observed on this machine and is recorded directly in the launch spec.
 
 ## Pinned Baseline
 
@@ -29,7 +29,7 @@ The repository supports a complete `mock` backend for fast local validation and 
 - Default device: `cuda:0`
 - Default GPU index: `0`
 
-On this machine, GPU `0` resolves to `NVIDIA GeForce RTX 5080 Laptop GPU` with driver `581.29`. DETB records the detected GPU and driver automatically in the run manifest.
+On March 24, 2026, GPU `0` on this machine resolved to `NVIDIA GeForce RTX 5080 Laptop GPU` with driver `595.79`. DETB records the detected GPU and driver automatically in the run manifest.
 
 ## Session Setup
 

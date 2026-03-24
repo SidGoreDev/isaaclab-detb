@@ -127,6 +127,27 @@ def _runtime_stack() -> dict[str, str]:
     }
 
 
+def _flatten_recurrent_policy_memory(policy_nn) -> None:
+    for memory_name in ("memory_a", "memory_c"):
+        memory = getattr(policy_nn, memory_name, None)
+        rnn = getattr(memory, "rnn", None)
+        if rnn is not None and hasattr(rnn, "flatten_parameters"):
+            rnn.flatten_parameters()
+
+
+def _policy_module(runner):
+    return getattr(runner.alg, "policy", getattr(runner.alg, "actor_critic"))
+
+
+def _flatten_actuator_lstm_modules(robot) -> None:
+    actuators = getattr(robot, "actuators", {})
+    for actuator in getattr(actuators, "values", lambda: [])():
+        network = getattr(actuator, "network", None)
+        lstm = getattr(network, "lstm", None)
+        if lstm is not None and hasattr(lstm, "flatten_parameters"):
+            lstm.flatten_parameters()
+
+
 
 def main() -> None:
     debug_handle, log_stage = _make_stage_logger(args.output_json)
@@ -176,7 +197,9 @@ def main() -> None:
         log_stage("Loading checkpoint into runner.")
         runner = _make_runner(env, agent_cfg)
         policy = runner.get_inference_policy(device=env.unwrapped.device)
+        _flatten_recurrent_policy_memory(_policy_module(runner))
         robot = env.unwrapped.scene["robot"]
+        _flatten_actuator_lstm_modules(robot)
         episodes: list[dict] = []
 
         log_stage(f"Starting evaluation loop for {args.eval_episodes} episode(s).")

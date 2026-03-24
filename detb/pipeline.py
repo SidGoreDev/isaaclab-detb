@@ -19,7 +19,7 @@ from detb.artifacts import (
 from detb.backends import IsaacLabBackend, MockBackend
 from detb.config import load_group_entry, merge_cfg
 from detb.evidence import assert_study_tier_ready, manifest_supports_requirements
-from detb.extension import task_registry_id
+from detb.extension import resolve_play_task_id, task_registry_id
 from detb.io import (
     create_manifest,
     ensure_directory,
@@ -477,6 +477,7 @@ def _objective_score(
 def run_visualize(cfg) -> CommandResult:
     visual_cfg = merge_cfg(cfg, {"execution": {"backend": "isaaclab"}})
     run_dir, manifest, artifacts = _prepare_run(visual_cfg, "visualize")
+    manifest.task_registry_id = resolve_play_task_id(visual_cfg)
     runtime_cfg = _with_runtime_context(visual_cfg, run_dir, manifest)
     backend = IsaacLabBackend(runtime_cfg)
     command, cwd = backend.build_visualize_command(runtime_cfg)
@@ -485,7 +486,7 @@ def run_visualize(cfg) -> CommandResult:
         "execute": bool(runtime_cfg.visualization.execute),
         "cwd": str(cwd),
         "command": command,
-        "task": str(task_registry_id(runtime_cfg)),
+        "task": str(resolve_play_task_id(runtime_cfg)),
         "device": str(runtime_cfg.execution.device),
         "num_envs": int(runtime_cfg.visualization.num_envs),
         "rollout_steps": int(runtime_cfg.visualization.rollout_steps),
@@ -500,7 +501,7 @@ def run_visualize(cfg) -> CommandResult:
         playback = backend.visualize(runtime_cfg)
         launch_spec = playback.get("launch_spec", launch_spec)
         launch_spec["execute"] = True
-        _record_isaac_play_artifacts(run_dir, artifacts, backend)
+        _record_isaac_play_artifacts(run_dir, manifest, artifacts, backend)
         _apply_runtime_stack_to_manifest(manifest, playback.get("runtime_stack"))
         summary_path = write_playback_summary(
             run_dir,
@@ -536,22 +537,23 @@ def run_visualize(cfg) -> CommandResult:
 def run_train_gui(cfg) -> CommandResult:
     gui_cfg = merge_cfg(cfg, {"execution": {"backend": "isaaclab"}})
     run_dir, manifest, artifacts = _prepare_run(gui_cfg, "train_gui")
-    backend = IsaacLabBackend(gui_cfg)
-    command, cwd = backend.build_train_gui_command(gui_cfg)
+    runtime_cfg = _with_runtime_context(gui_cfg, run_dir, manifest)
+    backend = IsaacLabBackend(runtime_cfg)
+    command, cwd = backend.build_train_gui_command(runtime_cfg)
     launch_spec = {
         "mode": "isaaclab_train",
-        "execute": bool(gui_cfg.visualization.train_execute),
+        "execute": bool(runtime_cfg.visualization.train_execute),
         "cwd": str(cwd),
         "command": command,
-        "task": str(task_registry_id(gui_cfg)),
-        "device": str(gui_cfg.execution.device),
-        "num_envs": int(gui_cfg.visualization.train_num_envs),
-        "max_iterations": int(gui_cfg.visualization.train_max_iterations),
-        "seed": int(gui_cfg.visualization.train_seed),
-        "video": bool(gui_cfg.visualization.video),
-        "headless": bool(gui_cfg.visualization.headless),
+        "task": str(task_registry_id(runtime_cfg)),
+        "device": str(runtime_cfg.execution.device),
+        "num_envs": int(runtime_cfg.visualization.train_num_envs),
+        "max_iterations": int(runtime_cfg.visualization.train_max_iterations),
+        "seed": int(runtime_cfg.visualization.train_seed),
+        "video": bool(runtime_cfg.visualization.video),
+        "headless": bool(runtime_cfg.visualization.headless),
     }
-    if gui_cfg.visualization.train_execute:
+    if runtime_cfg.visualization.train_execute:
         return_code = backend.run_command(command, cwd)
     else:
         return_code = 0
@@ -563,8 +565,8 @@ def run_train_gui(cfg) -> CommandResult:
                 f"# DETB GUI Training Launch: {manifest.run_id}",
                 "",
                 "This command delegates to the pinned Isaac Lab training runtime.",
-                f"- Execute: `{gui_cfg.visualization.train_execute}`",
-                f"- Task: `{gui_cfg.task.command}`",
+                f"- Execute: `{runtime_cfg.visualization.train_execute}`",
+                f"- Task: `{runtime_cfg.task.command}`",
                 f"- Command file: `train_gui_command.json`",
             ]
         )
@@ -577,7 +579,7 @@ def run_train_gui(cfg) -> CommandResult:
             ArtifactRecord("markdown", "summary.md", "GUI training launch summary"),
         ]
     )
-    return _finalize_run(gui_cfg, run_dir, manifest, artifacts)
+    return _finalize_run(runtime_cfg, run_dir, manifest, artifacts)
 
 def run_tune(cfg, config_dir: str | Path | None = None) -> CommandResult:
     assert_study_tier_ready(cfg)
@@ -726,8 +728,18 @@ def _record_isaac_eval_artifacts(run_dir: Path, manifest: RunManifest, artifacts
                 artifacts.append(ArtifactRecord("log", path.name, f"Isaac Lab evaluation log for seed {seed_run['seed']}"))
 
 
-def _record_isaac_play_artifacts(run_dir: Path, artifacts: list[ArtifactRecord], backend: IsaacLabBackend) -> None:
+def _record_isaac_play_artifacts(
+    run_dir: Path,
+    manifest: RunManifest,
+    artifacts: list[ArtifactRecord],
+    backend: IsaacLabBackend,
+) -> None:
     metadata = backend.last_play_metadata or {}
+    source_checkpoint = metadata.get("source_checkpoint_path")
+    if source_checkpoint:
+        backend.copy_checkpoint(Path(source_checkpoint), Path(manifest.checkpoint_path))
+        artifacts.append(ArtifactRecord("checkpoint", Path(manifest.checkpoint_path).name, "Playback checkpoint copy"))
+
     if metadata:
         write_json(run_dir / "isaac_play_runs.json", metadata)
         artifacts.append(ArtifactRecord("json", "isaac_play_runs.json", "Isaac Lab playback run metadata"))

@@ -4,7 +4,7 @@ from detb.backends import IsaacLabBackend
 from detb.config import default_config_dir, load_config
 from detb.extension import detb_lab_version
 from detb.io import read_json
-from detb.models import ArtifactRecord
+from detb.models import EpisodeMetric
 from detb.pipeline import (
     bundle_artifacts,
     generate_requirements,
@@ -107,6 +107,7 @@ def test_visualization_launch_specs(tmp_path: Path, monkeypatch):
     train_payload = read_json(train_gui_result.run_dir / "train_gui_command.json")
 
     assert visualize_payload["mode"] == "isaaclab_play"
+    assert visualize_payload["task"] == "DETB-Velocity-Flat-Anymal-C-Play-v0"
     assert visualize_payload["execute"] is False
     assert (visualize_result.run_dir / "visualize_command.json").exists()
     assert train_payload["mode"] == "isaaclab_train"
@@ -117,11 +118,13 @@ def test_visualization_launch_specs(tmp_path: Path, monkeypatch):
 def test_visualization_execute_records_playback_artifacts(tmp_path: Path, monkeypatch):
     def fake_visualize(self, cfg):
         run_dir = Path(str(cfg.execution.detb_run_dir))
+        source_checkpoint = tmp_path / "source_checkpoint.pt"
+        source_checkpoint.write_text("checkpoint", encoding="utf-8")
         (run_dir / "isaac_play_result.json").write_text(
             '{\n'
             '  "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
             '  "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
-            '  "checkpoint": "C:/checkpoint.pt",\n'
+            f'  "checkpoint": "{source_checkpoint.as_posix()}",\n'
             '  "video_files": ["C:/video.mp4"],\n'
             '  "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},\n'
             '  "diagnostics": {\n'
@@ -153,13 +156,14 @@ def test_visualization_execute_records_playback_artifacts(tmp_path: Path, monkey
             "stdout_log": "isaac_play_stdout.log",
             "stderr_log": "isaac_play_stderr.log",
             "return_code": 0,
+            "source_checkpoint_path": str(source_checkpoint),
             "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
             "video_files": ["C:/video.mp4"],
         }
         return {
             "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",
             "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",
-            "checkpoint": "C:/checkpoint.pt",
+            "checkpoint": str(source_checkpoint),
             "video_files": ["C:/video.mp4"],
             "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
             "diagnostics": {
@@ -199,16 +203,21 @@ def test_visualization_execute_records_playback_artifacts(tmp_path: Path, monkey
 
     command_payload = read_json(visualize_result.run_dir / "visualize_command.json")
     artifact_payload = read_json(visualize_result.run_dir / "artifact_registry.json")
+    manifest = read_json(visualize_result.run_dir / "run_manifest.json")
     summary_text = (visualize_result.run_dir / "summary.md").read_text(encoding="utf-8")
     artifact_paths = {item["relative_path"] for item in artifact_payload}
 
     assert command_payload["execute"] is True
+    assert command_payload["task"] == "DETB-Velocity-Flat-Anymal-C-Play-v0"
     assert command_payload["telemetry_csv"] == "playback_telemetry.csv"
     assert "isaac_play_result.json" in artifact_paths
     assert "playback_telemetry.csv" in artifact_paths
     assert "isaac_play_debug.log" in artifact_paths
     assert "isaac_play_runs.json" in artifact_paths
+    assert "baseline_policy.pt" in artifact_paths
+    assert manifest["task_registry_id"] == "DETB-Velocity-Flat-Anymal-C-Play-v0"
     assert "Verdict: `insufficient_motion`" in summary_text
+    assert (visualize_result.run_dir / "baseline_policy.pt").exists()
 
 
 def test_study_tier_requires_minimum_eval_episodes(tmp_path: Path):
@@ -222,7 +231,7 @@ def test_study_tier_requires_minimum_eval_episodes(tmp_path: Path):
         raise AssertionError("Expected study-tier evaluation to reject under-threshold settings.")
 
 
-def test_isaac_artifact_registry_records_debug_log(tmp_path: Path, monkeypatch):
+def test_isaac_train_packaging_records_configs_logs_and_runtime_stack(tmp_path: Path, monkeypatch):
     import detb.pipeline as pipeline
 
     class FakeIsaacBackend(IsaacLabBackend):
@@ -257,15 +266,103 @@ def test_isaac_artifact_registry_records_debug_log(tmp_path: Path, monkeypatch):
                 "source_env_yaml": str(env_yaml),
                 "source_agent_yaml": str(agent_yaml),
                 "source_debug_log": str(run_dir / "isaac_train_debug.log"),
-                "launch_spec": {"mode": "isaaclab_train"},
+                "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
+                "launch_spec": {"mode": "isaaclab_train", "command": ["python", "train.py"]},
             }
 
     monkeypatch.setattr(pipeline, "_backend_for", lambda name: FakeIsaacBackend())
 
     result = run_train(_cfg(tmp_path, "execution.backend=isaaclab"))
     artifacts = read_json(result.run_dir / "artifact_registry.json")
+    manifest = read_json(result.run_dir / "run_manifest.json")
     paths = {item["relative_path"] for item in artifacts}
 
+    assert (result.run_dir / "baseline_policy.pt").exists()
+    assert (result.run_dir / "isaac_env.yaml").exists()
+    assert (result.run_dir / "isaac_agent.yaml").exists()
+    assert (result.run_dir / "isaac_train_command.json").exists()
     assert "isaac_train_debug.log" in paths
+    assert "isaac_train_command.json" in paths
+    assert "baseline_policy.pt" in paths
+    assert "isaac_env.yaml" in paths
+    assert "isaac_agent.yaml" in paths
     assert "run_manifest.json" in paths
     assert "resolved_config.yaml" in paths
+    assert manifest["torch_version"] == "2.7.0"
+    assert manifest["cuda_version"] == "12.4"
+    assert manifest["rsl_rl_version"] == "3.1.2"
+
+
+def test_isaac_evaluate_packaging_records_seed_artifacts_and_runtime_stack(tmp_path: Path, monkeypatch):
+    import detb.pipeline as pipeline
+
+    class FakeIsaacBackend(IsaacLabBackend):
+        def evaluate(self, cfg):
+            run_dir = Path(str(cfg.execution.detb_run_dir))
+            source_dir = tmp_path / "isaac-eval-source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            checkpoint = source_dir / "model_0.pt"
+            checkpoint.write_text("checkpoint", encoding="utf-8")
+
+            seed_runs = []
+            episodes = []
+            for seed in cfg.execution.seeds:
+                result_name = f"isaac_eval_seed_{int(seed)}.json"
+                stdout_name = f"isaac_eval_seed_{int(seed)}_stdout.log"
+                stderr_name = f"isaac_eval_seed_{int(seed)}_stderr.log"
+                (run_dir / result_name).write_text("{}", encoding="utf-8")
+                (run_dir / stdout_name).write_text("stdout\n", encoding="utf-8")
+                (run_dir / stderr_name).write_text("stderr\n", encoding="utf-8")
+                seed_runs.append(
+                    {
+                        "seed": int(seed),
+                        "result_json": result_name,
+                        "stdout_log": stdout_name,
+                        "stderr_log": stderr_name,
+                        "return_code": 0,
+                        "command": ["python", "evaluate.py"],
+                        "cwd": str(tmp_path),
+                    }
+                )
+                episodes.append(
+                    EpisodeMetric(
+                        episode_id=f"{int(seed)}-0",
+                        terrain_level=0,
+                        terrain_name="flat_eval",
+                        fault_level=0.0,
+                        fault_name="nominal",
+                        success=1,
+                        distance_m=9.5,
+                        elapsed_time_s=20.0,
+                        energy_proxy=0.4,
+                        failure_label="none",
+                        seed=int(seed),
+                        sensor_profile="proprio",
+                    )
+                )
+
+            self.last_eval_metadata = {
+                "mode": "isaaclab_eval",
+                "source_checkpoint_path": str(checkpoint),
+                "seed_runs": seed_runs,
+                "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
+            }
+            return episodes
+
+    monkeypatch.setattr(pipeline, "_backend_for", lambda name: FakeIsaacBackend())
+
+    result = run_evaluate(_cfg(tmp_path, "execution.backend=isaaclab"))
+    artifacts = read_json(result.run_dir / "artifact_registry.json")
+    manifest = read_json(result.run_dir / "run_manifest.json")
+    paths = {item["relative_path"] for item in artifacts}
+
+    assert (result.run_dir / "baseline_policy.pt").exists()
+    assert (result.run_dir / "isaac_eval_runs.json").exists()
+    assert "baseline_policy.pt" in paths
+    assert "isaac_eval_runs.json" in paths
+    assert "isaac_eval_seed_11.json" in paths
+    assert "isaac_eval_seed_11_stdout.log" in paths
+    assert "isaac_eval_seed_11_stderr.log" in paths
+    assert manifest["torch_version"] == "2.7.0"
+    assert manifest["cuda_version"] == "12.4"
+    assert manifest["rsl_rl_version"] == "3.1.2"

@@ -33,6 +33,7 @@ execution:
   isaaclab_eval_script: "scripts/detb_isaaclab_eval.py"
   isaaclab_python: "C:/Users/sidma/miniconda3/envs/isaaclab51/python.exe"
   isaaclab_timeout_s: 10800
+  isaaclab_kit_args: ""
   experiment_name: ""
   load_run: ""
   checkpoint: ""
