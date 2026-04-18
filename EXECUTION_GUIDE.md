@@ -207,6 +207,26 @@ Preview mode writes a launch spec. Executed visualize runs should also capture p
 
 Preview mode writes `train_gui_command.json`. Executed runs should also preserve the corresponding stdout/stderr and any video artifacts requested through the visualization config.
 
+### Bundle Artifacts
+
+`bundle-artifacts --source-dir <run_dir>` operates in place on an existing evaluate run directory. Expect after a successful run:
+
+- refreshed `summary.md` in the source run directory, rebuilt from the stored aggregate metrics
+
+No new run directory is created; the command mutates the source run directory.
+
+### Generate Requirements
+
+`generate-requirements --source-dir <run_dir>` operates in place on an existing evaluate run directory. Expect after a successful run:
+
+- `requirement_ledger.csv`
+- `requirement_ledger.json`
+- `candidate_requirements.md`
+- refreshed `artifact_registry.json` with the new requirement entries
+- refreshed `run_manifest.json` and `resolved_config.yaml`
+
+All candidate requirements remain candidates until a human reviewer promotes them.
+
 ## Task And Robot Selection
 
 Useful task selectors:

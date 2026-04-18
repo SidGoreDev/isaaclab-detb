@@ -136,7 +136,7 @@ Windows note:
 
 ### `bundle-artifacts`
 
-Rebuilds the summary for an existing run directory.
+Rebuilds the summary for an existing run directory. Operates in place on the source run directory.
 
 Typical usage:
 
@@ -144,13 +144,13 @@ Typical usage:
 python -m detb.cli bundle-artifacts --source-dir outputs/evaluate/<run_id>
 ```
 
-Expected outputs:
+Expected outputs in the source run directory:
 
-- refreshed summary artifacts in the source run directory
+- refreshed `summary.md` rebuilt from the stored aggregate metrics
 
 ### `generate-requirements`
 
-Creates a candidate requirement ledger from prior run artifacts.
+Creates a candidate requirement ledger from prior run artifacts. Operates in place on the source run directory.
 
 Typical usage:
 
@@ -158,9 +158,14 @@ Typical usage:
 python -m detb.cli generate-requirements --source-dir outputs/evaluate/<run_id>
 ```
 
-Expected outputs:
+Expected outputs in the source run directory:
 
-- candidate requirement ledger material in the generated requirements run directory
+- `requirement_ledger.csv`
+- `requirement_ledger.json`
+- `candidate_requirements.md`
+- refreshed `artifact_registry.json`, `run_manifest.json`, and `resolved_config.yaml`
+
+Treat every emitted record as a candidate requirement until a human reviewer promotes it.
 
 ## Experimental Commands
 
