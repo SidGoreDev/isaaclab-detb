@@ -30,3 +30,24 @@ This checklist defines the narrow DETB v1 release contract.
 
 - The workflow in [`.github/workflows/ci.yml`](/C:/Dev%20Projects/NVIDIA%20Omniverse/IsaacLab%20Testbed/.github/workflows/ci.yml) stays green.
 - The acceptance items above remain consistent with [README.md](/C:/Dev%20Projects/NVIDIA%20Omniverse/IsaacLab%20Testbed/README.md), [EXECUTION_GUIDE.md](/C:/Dev%20Projects/NVIDIA%20Omniverse/IsaacLab%20Testbed/EXECUTION_GUIDE.md), and [Operator_Instructions.md](/C:/Dev%20Projects/NVIDIA%20Omniverse/IsaacLab%20Testbed/Operator_Instructions.md).
+
+## Deferred To Post-V1
+
+Items identified during v1 gap-closure planning that are explicitly out of scope
+for the v1 release. Recorded here so they do not rot. Line counts are snapshots
+at 2026-04-18; a post-v1 audit PR should refresh them.
+
+- **Modularize `detb/pipeline.py`.** The module is 832 lines with 23 top-level
+  functions. Candidate split: `train_commands`, `eval_commands`,
+  `analysis_commands`, shared helpers. Readable today; refactor for
+  maintainability, not correctness.
+- **Decompose `scripts/detb_isaaclab_play.py::main()`.** The function is 246
+  lines combining rollout, telemetry collection, fault injection state, and
+  video recording. Candidate extraction: rollout-loop helper, diagnostics
+  builder. Works today; refactor for testability.
+- **Isolated test coverage for experimental commands.** `train-gui`, `sweep`,
+  `sensor-eval`, `terrain-eval`, `failure-eval`, and `tune` share a single
+  bulk integration test (`tests/test_pipeline.py::test_analysis_commands_and_requirements`).
+  Out-of-scope per "Out Of Scope For V1" above, but a regression in any one
+  command currently surfaces as a generic test failure rather than a targeted
+  signal.
