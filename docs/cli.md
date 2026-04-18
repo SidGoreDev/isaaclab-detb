@@ -9,9 +9,28 @@ Useful flags:
 - `--config-name <name>`
 - `--config-dir <path>`
 - `--set key=value`
-- `--source-dir <run_dir>` for summary rebuild and requirement generation
+- `--source-dir <run_dir>` for `bundle-artifacts` and `generate-requirements`
 
-## Commands
+## V1 Support Contract
+
+Supported v1 commands:
+
+- `detb train`
+- `detb evaluate`
+- `detb visualize`
+- `detb bundle-artifacts`
+- `detb generate-requirements`
+
+Experimental commands that are not part of the v1 support contract:
+
+- `detb train-gui`
+- `detb sweep`
+- `detb sensor-eval`
+- `detb terrain-eval`
+- `detb failure-eval`
+- `detb tune`
+
+## Supported Commands
 
 ### `detb train`
 
@@ -20,33 +39,6 @@ Creates a new run directory with a manifest, config snapshot, training summary, 
 ### `detb evaluate`
 
 Creates a new run directory with episode metrics, aggregate metrics, overview SVG, and summary markdown. With `execution.backend=isaaclab` it also records per-seed Isaac launch metadata and copies the evaluated checkpoint into the DETB run directory.
-
-### `detb sweep`
-
-Runs the configured staged screening points and produces DOE-style comparison artifacts.
-
-### `detb tune`
-
-Ranks design points using objective weights and target thresholds from `configs/base.yaml`. Outputs a tuning summary plus machine-readable candidate ranking.
-
-Useful overrides:
-
-- `--set study=sweep` to use the multi-point design screen.
-- `--set objective.success_weight=<value>` to change ranking pressure on success.
-- `--set objective.terrain_weight=<value>` to prioritize terrain generalization more heavily.
-- `--set objective.target_tgs=<value>` or `--set objective.target_failure_threshold=<value>` to tighten outcome gates.
-
-### `detb sensor-eval`
-
-Compares all configured sensor profiles and recommends a minimum viable profile by ROI score.
-
-### `detb terrain-eval`
-
-Runs the configured terrain battery, writes per-terrain success results, and computes Terrain Generalization Score.
-
-### `detb failure-eval`
-
-Runs the configured fault sweep and detects the first critical severity threshold where success falls below 50 percent and confidence intervals clear that threshold.
 
 ### `detb visualize`
 
@@ -76,6 +68,16 @@ Behavior note:
 - On the baseline DETB ANYmal-C task family, `visualization.use_pretrained_checkpoint=true` resolves to the upstream Isaac Lab published ANYmal-C checkpoint.
 - On DETB-only task families without a published upstream equivalent, requesting a pretrained checkpoint now fails explicitly instead of silently falling back to the latest local smoke run.
 
+### `detb bundle-artifacts`
+
+Rebuilds the summary for an existing run directory by calling `bundle_artifacts(...)`.
+
+### `detb generate-requirements`
+
+Creates a candidate requirement ledger from prior run artifacts.
+
+## Experimental Commands
+
 ### `detb train-gui`
 
 Builds the Isaac Lab GUI training command using the configured `execution.isaaclab_python` interpreter against the pinned `..\IsaacLab-5.1` checkout. By default it emits a launch spec without execution. Set `--set visualization.train_execute=true` to actually launch live training.
@@ -85,6 +87,33 @@ Useful overrides:
 - `--set visualization.train_num_envs=<n>` to change live training scale.
 - `--set visualization.train_max_iterations=<n>` to cap the interactive run.
 - `--set visualization.video=true` to record training snippets through Isaac Lab.
+
+### `detb sweep`
+
+Runs the configured staged screening points and produces DOE-style comparison artifacts.
+
+### `detb tune`
+
+Ranks design points using objective weights and target thresholds from `configs/base.yaml`. Outputs a tuning summary plus machine-readable candidate ranking.
+
+Useful overrides:
+
+- `--set study=sweep` to use the multi-point design screen.
+- `--set objective.success_weight=<value>` to change ranking pressure on success.
+- `--set objective.terrain_weight=<value>` to prioritize terrain generalization more heavily.
+- `--set objective.target_tgs=<value>` or `--set objective.target_failure_threshold=<value>` to tighten outcome gates.
+
+### `detb sensor-eval`
+
+Compares all configured sensor profiles and recommends a minimum viable profile by ROI score.
+
+### `detb terrain-eval`
+
+Runs the configured terrain battery, writes per-terrain success results, and computes Terrain Generalization Score.
+
+### `detb failure-eval`
+
+Runs the configured fault sweep and detects the first critical severity threshold where success falls below 50 percent and confidence intervals clear that threshold.
 
 ## Task Selection
 
@@ -96,7 +125,3 @@ detb train --set task=flat_walk_stability
 detb train --set task=flat_walk_simple_actuator --set robot=anymal_c_simple_actuator
 detb visualize --set task=flat_walk_stability --set visualization.execute=true
 ```
-
-### `detb generate-requirements --source-dir <run_dir>`
-
-Creates a candidate requirement ledger from prior run artifacts.

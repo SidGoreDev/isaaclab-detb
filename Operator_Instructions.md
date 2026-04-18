@@ -6,6 +6,27 @@ This file is the quick operator runbook for DETB: the Isaac Lab Design Evaluatio
 
 For deeper environment and handoff detail, also see `README.md` and `EXECUTION_GUIDE.md`.
 
+## V1 Support Contract
+
+The baseline operator path is:
+
+- `train`
+- `evaluate`
+- `visualize`
+- `bundle-artifacts`
+- `generate-requirements`
+
+These commands are part of the v1 support contract.
+
+The following commands are experimental and are not part of the v1 support contract:
+
+- `train-gui`
+- `sweep`
+- `sensor-eval`
+- `terrain-eval`
+- `failure-eval`
+- `tune`
+
 ## Baseline
 
 - Isaac Sim: `5.1.0`
@@ -113,37 +134,46 @@ Windows note:
 
 - GUI Isaac launches currently inject `--/app/vulkan=false` to keep the simulator stable on this machine.
 
-### `train-gui`
+### `bundle-artifacts`
 
-Launches the training GUI path. Preview mode writes the launch spec only. Execute mode launches the real Isaac GUI training path and stores run metadata under `outputs/train_gui/<run_id>/`.
+Rebuilds the summary for an existing run directory.
 
 Typical usage:
 
 ```powershell
-python -m detb.cli train-gui
-python -m detb.cli train-gui --set execution.backend=isaaclab --set visualization.train_execute=true
+python -m detb.cli bundle-artifacts --source-dir outputs/evaluate/<run_id>
 ```
 
 Expected outputs:
 
-- `resolved_config.yaml`
-- `run_manifest.json`
-- `artifact_registry.json`
-- `summary.md`
-- `train_gui_command.json`
+- refreshed summary artifacts in the source run directory
 
-## Study And Analysis Commands
+### `generate-requirements`
 
-These commands are DETB study workflows that produce ranked results, trade-study outputs, or candidate requirement material from stored evidence:
+Creates a candidate requirement ledger from prior run artifacts.
 
+Typical usage:
+
+```powershell
+python -m detb.cli generate-requirements --source-dir outputs/evaluate/<run_id>
+```
+
+Expected outputs:
+
+- candidate requirement ledger material in the generated requirements run directory
+
+## Experimental Commands
+
+These commands are useful for development, but they are not part of the v1 support contract:
+
+- `train-gui`
 - `sweep`
 - `sensor-eval`
 - `terrain-eval`
 - `failure-eval`
 - `tune`
-- `generate-requirements`
 
-Treat generated requirements as candidate requirements until a human reviews them.
+Treat generated requirements as candidate requirements until a human reviews them. `generate-requirements` is part of the v1 operator path, but the output is still a candidate requirement ledger rather than an approved requirement set.
 
 ## What To Check First After A Run
 
@@ -200,13 +230,13 @@ python -m detb.cli train-gui --set execution.backend=isaaclab --set visualizatio
 
 ## Current Verified Snapshot
 
-As of March 24, 2026 on this machine:
+As of 2026-04-14 on this machine:
 
-- `python -m pytest -q` passes
+- the v1 operator path is in active use and revalidated locally
 - `mock` smoke workflows are available
 - real Isaac `train` smoke is working
 - real Isaac `evaluate` smoke is working
 - real Isaac `visualize` execute is working
-- real Isaac `train-gui` execute is working
+- `bundle-artifacts` and `generate-requirements` operate on stored run directories
 
 Update this file if the pinned baseline, command surface, or verified workflow status changes.

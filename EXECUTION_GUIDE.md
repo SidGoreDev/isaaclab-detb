@@ -1,6 +1,6 @@
 # DETB Execution Guide
 
-> Updated 2026-03-24. This file is a repo-local resume and execution guide for future engineers working in DETB.
+> Updated 2026-04-14. This file is a repo-local resume and execution guide for future engineers working in DETB.
 
 ## Purpose
 
@@ -28,27 +28,18 @@ This is not the public product overview. Treat `README.md`, `docs/bootstrap.md`,
 
 ### Machine snapshot
 
-This machine resolves `cuda:0` to:
-
-- GPU: `NVIDIA GeForce RTX 5080 Laptop GPU`
-- driver: `581.29`
-
-DETB records detected GPU and driver metadata in the run manifest.
+Use the run manifest to confirm the detected GPU and driver on the current workstation. DETB records that metadata automatically for each run, so the manifest is the source of truth when the workstation changes.
 
 ### Workflow status snapshot
 
-As of 2026-03-24:
+As of 2026-04-14:
 
-- `mock` backend is the stable contract baseline.
-- Real Isaac Lab smoke `train` and `evaluate` runs have completed successfully and produced repo-local DETB artifacts plus repo-local Isaac Lab logs.
-- GUI preview and execute flows exist through DETB:
-  - `visualize`
-  - `train-gui`
-- Local test snapshot on 2026-03-24:
-  - `python -m pytest -q`
-  - result: `25 passed`
+- The stable v1 operator contract is `train`, `evaluate`, `visualize`, `bundle-artifacts`, and `generate-requirements`.
+- `mock` backend remains the stable contract baseline for fast local validation.
+- Real Isaac Lab smoke `train`, `evaluate`, and `visualize` flows are verified on the pinned runtime for the baseline operator path.
+- `train-gui`, `sweep`, `sensor-eval`, `terrain-eval`, `failure-eval`, and `tune` remain experimental and are not part of the v1 support contract.
 
-Treat the test count and smoke-run status above as a dated verification snapshot, not an invariant.
+Treat any machine-specific verification details as dated snapshots, not invariants.
 
 ## Environment Setup
 
@@ -77,7 +68,6 @@ Use this first when validating repository behavior without depending on Isaac ru
 ```powershell
 python -m detb.cli train
 python -m detb.cli evaluate
-python -m detb.cli tune --set study=sweep
 python -m pytest -q
 ```
 
@@ -88,7 +78,26 @@ Expected outcome:
 - train writes reviewable training artifacts
 - evaluate writes machine-readable metrics and summary output
 
-### 2. Minimal real Isaac Lab smoke path
+### 2. Baseline operator path
+
+Use this to exercise the concrete v1 support contract:
+
+```powershell
+python -m detb.cli train
+python -m detb.cli evaluate
+python -m detb.cli visualize --set visualization.execute=true
+python -m detb.cli bundle-artifacts --source-dir outputs/evaluate/<run_id>
+python -m detb.cli generate-requirements --source-dir outputs/evaluate/<run_id>
+```
+
+Expected outcome:
+
+- `train` and `evaluate` write the standard DETB run directory bundle
+- `visualize` writes playback diagnostics and optional video artifacts
+- `bundle-artifacts` rebuilds the summary from an existing run directory
+- `generate-requirements` emits a candidate requirement ledger from stored evidence
+
+### 3. Minimal real Isaac Lab smoke path
 
 Use this when you need to validate the real subprocess bridge while keeping runtime small:
 
@@ -104,13 +113,12 @@ Expected outcome:
 - train copies a real checkpoint and resolved Isaac config snapshots into the DETB run directory
 - evaluate writes episode and aggregate evidence plus Isaac run metadata
 
-### 3. GUI preview path
+### 4. GUI preview path
 
 Use this when you want to inspect the exact Isaac Lab launch command before opening the simulator:
 
 ```powershell
 python -m detb.cli visualize
-python -m detb.cli train-gui
 ```
 
 Expected outcome:
@@ -119,13 +127,12 @@ Expected outcome:
 - DETB writes launch-spec JSON files into the run directory
 - the exact command, task selection, and checkpoint choice remain reviewable before execution
 
-### 4. GUI execute path
+### 5. GUI execute path
 
 Use this only when you want live simulator playback or training:
 
 ```powershell
 python -m detb.cli visualize --set visualization.execute=true
-python -m detb.cli train-gui --set visualization.train_execute=true
 ```
 
 On Windows, DETB now injects `--/app/vulkan=false` into GUI Isaac launches by default. The launch spec records that Kit argument so the renderer choice stays explicit and reviewable.
@@ -137,6 +144,20 @@ Useful overrides:
 - `--set visualization.video=true`
 - `--set visualization.load_run=<run_name>`
 - `--set visualization.checkpoint=<path>`
+
+### Experimental commands
+
+The following commands are available but are outside the v1 support contract:
+
+```powershell
+python -m detb.cli train-gui
+python -m detb.cli train-gui --set visualization.train_execute=true
+python -m detb.cli sweep
+python -m detb.cli sensor-eval
+python -m detb.cli terrain-eval
+python -m detb.cli failure-eval
+python -m detb.cli tune
+```
 
 ## Artifact Expectations
 
@@ -221,15 +242,16 @@ If the repo fails before step 5, fix the contract path first. The `mock` backend
 
 ## Current Engineering Priorities
 
-The repo is past the original subprocess-timeout blocker. The next useful work is broader and cleaner validation, not re-investigating the old March 17 startup issue.
+The repo is past the original subprocess-timeout blocker. The next useful work is keeping the v1 contract stable while broadening validation in a controlled way, not re-investigating the old March 17 startup issue.
 
 Priorities:
 
-1. Keep the `mock` path and artifact contracts stable as the regression baseline.
-2. Expand verified real-backend coverage beyond minimal smoke runs and into broader study-tier workflows.
-3. Keep simulator-specific behavior behind the backend and script adapters rather than leaking imports into analysis code.
-4. Add or update tests whenever command behavior, artifacts, or thresholds change.
-5. Update docs whenever baseline versions, verified status, or workflow expectations change.
+1. Keep the v1 path and artifact contracts stable as the regression baseline.
+2. Keep the `mock` path stable for fast local validation.
+3. Expand verified real-backend coverage only after the baseline operator path remains stable.
+4. Keep simulator-specific behavior behind the backend and script adapters rather than leaking imports into analysis code.
+5. Add or update tests whenever command behavior, artifacts, or thresholds change.
+6. Update docs whenever baseline versions, verified status, or workflow expectations change.
 
 ## Working Rules
 

@@ -16,9 +16,30 @@ DETB is a simulation-first design evaluation toolkit for quadruped systems engin
 - A claim of validated sim-to-real transfer.
 - A generic reinforcement learning benchmark zoo.
 
+## V1 Support Contract
+
+The concrete v1 operator path is:
+
+- `train`
+- `evaluate`
+- `visualize`
+- `bundle-artifacts`
+- `generate-requirements`
+
+The v1 contract is supported on the `mock` backend for fast local validation, and the real Isaac Lab backend is verified for the core simulator-backed path that feeds those same artifacts.
+
+The following commands are experimental and are not part of the v1 support contract:
+
+- `train-gui`
+- `sweep`
+- `sensor-eval`
+- `terrain-eval`
+- `failure-eval`
+- `tune`
+
 ## Current Status
 
-The repository supports a complete `mock` backend for fast local validation and verified Isaac Lab execution paths for `train`, `evaluate`, `visualize`, and `train-gui`. Simulator-native task and robot ownership now live under `source/detb_lab`, while `detb/` remains the orchestration and evidence layer. On March 17, 2026, minimal real `train` and `evaluate` smoke runs completed through the baseline DETB ANYmal-C family, the DETB stability-focused family, and the first divergent DETB robot/profile family using the pinned `isaaclab51` Python runtime. On March 24, 2026, Windows GUI launch verification was re-established by routing GUI Kit startup through `--/app/vulkan=false`, which avoids the Vulkan startup crash observed on this machine and is recorded directly in the launch spec.
+As of 2026-04-14, the repository supports the v1 operator contract above with a complete `mock` backend for fast local validation and a verified Isaac Lab backend for the core simulator-backed flows. Simulator-native task and robot ownership live under `source/detb_lab`, while `detb/` remains the orchestration and evidence layer. Windows GUI launches through DETB use `--/app/vulkan=false` on this machine so the GUI path stays stable and reviewable in the launch spec.
 
 ## Pinned Baseline
 
@@ -29,7 +50,7 @@ The repository supports a complete `mock` backend for fast local validation and 
 - Default device: `cuda:0`
 - Default GPU index: `0`
 
-On March 24, 2026, GPU `0` on this machine resolved to `NVIDIA GeForce RTX 5080 Laptop GPU` with driver `595.79`. DETB records the detected GPU and driver automatically in the run manifest.
+On 2026-04-14, GPU `0` on this machine resolved to `NVIDIA GeForce RTX 5080 Laptop GPU` with driver `595.79`. DETB records the detected GPU and driver automatically in the run manifest.
 
 ## Session Setup
 
@@ -43,34 +64,47 @@ python -m pip install -e .[dev]
 python -m pip install -e source/detb_lab
 detb train
 detb evaluate
-detb tune --set study=sweep
 detb visualize --set visualization.execute=true
-detb train-gui --set visualization.train_execute=true
+detb bundle-artifacts --source-dir outputs/evaluate/<run_id>
+detb generate-requirements --source-dir outputs/evaluate/<run_id>
 ```
 
-## GUI And Tuning Workflows
+## Experimental Workflows
+
+The following commands are useful for development, but they are not part of the v1 support contract:
+
+- `train-gui`
+- `sweep`
+- `sensor-eval`
+- `terrain-eval`
+- `failure-eval`
+- `tune`
 
 Use dry-run launch specs first so the exact Isaac Lab command is reviewable before anything opens:
 
 ```powershell
 detb visualize
-detb train-gui
-```
-
-Then execute the pinned GUI path when you are ready to inspect simulator behavior:
-
-```powershell
 detb visualize --set visualization.execute=true
-detb train-gui --set visualization.train_execute=true
 ```
 
 For the baseline `task=flat_walk` path, `visualization.use_pretrained_checkpoint=true` now resolves to the upstream Isaac Lab ANYmal-C pretrained checkpoint. DETB-only task variants without a published upstream equivalent fail fast instead of silently replaying the latest local smoke checkpoint.
 
-Tune against the design sweep and adjust objective weights or thresholds directly from the CLI:
+The GUI training path remains available for manual inspection, but it is experimental:
+
+```powershell
+detb train-gui
+detb train-gui --set visualization.train_execute=true
+```
+
+Tune and study workflows are also experimental:
 
 ```powershell
 detb tune --set study=sweep
 detb tune --set study=sweep --set objective.terrain_weight=0.5 --set objective.target_tgs=0.8
+detb sweep
+detb sensor-eval
+detb terrain-eval
+detb failure-eval
 ```
 
 Select a DETB-owned task variant directly from Hydra when you want a different Isaac registry family:
@@ -88,20 +122,26 @@ detb train --set task=flat_walk_simple_actuator --set robot=anymal_c_simple_actu
 detb evaluate --set task=flat_walk_simple_actuator --set robot=anymal_c_simple_actuator
 ```
 
-## Commands
+## Supported Commands
 
 | Command | Purpose |
 |---------|---------|
 | `detb train` | Produce a manifest, training summary, reward curve artifacts, and either a synthetic checkpoint (`mock`) or copied real checkpoint/config snapshots (`isaaclab`). |
 | `detb evaluate` | Produce episode metrics, aggregate metrics, overview plot, summary markdown, and Isaac run metadata when `execution.backend=isaaclab`. |
+| `detb visualize` | Launch the pinned Isaac Lab GUI playback path or emit a launch spec when `visualization.execute=false`. |
+| `detb bundle-artifacts --source-dir ...` | Rebuild the summary and bundle artifacts from an existing run directory. |
+| `detb generate-requirements --source-dir ...` | Generate a candidate requirement ledger from stored artifacts. |
+
+## Experimental Commands
+
+| Command | Purpose |
+|---------|---------|
+| `detb train-gui` | Launch the pinned Isaac Lab GUI training path or emit a launch spec when `visualization.train_execute=false`. |
 | `detb sweep` | Run staged design-point screening using the configured study points. |
-| `detb tune` | Rank design points using objective weights and target thresholds. |
 | `detb sensor-eval` | Compare configured sensor profiles under matched conditions. |
 | `detb terrain-eval` | Run the configured terrain battery and compute TGS. |
 | `detb failure-eval` | Sweep fault severity and detect the first critical threshold. |
-| `detb visualize` | Launch the pinned Isaac Lab GUI playback path or emit a launch spec when `visualization.execute=false`. |
-| `detb train-gui` | Launch the pinned Isaac Lab GUI training path or emit a launch spec when `visualization.train_execute=false`. |
-| `detb generate-requirements --source-dir ...` | Generate a candidate requirement ledger from stored artifacts. |
+| `detb tune` | Rank design points using objective weights and target thresholds. |
 
 ## Artifact Contract
 
@@ -141,11 +181,11 @@ outputs/      Generated artifacts (gitignored)
 
 ## Roadmap
 
-1. Keep the mock-backed pipeline stable as the contract baseline.
-2. Expand DETB-owned task families and robot configs under `source/detb_lab`.
-3. Use GUI launch specs and Isaac Lab playback/training to inspect progress visually.
-4. Tune objective weights and target thresholds until studies produce useful outputs.
-5. Complete terrain taxonomy and generator mapping from Isaac Lab best practices.
-6. Expand the verified real Isaac Lab backend from smoke runs into broader study coverage and requirement generation workflows.
+1. Keep the v1 operator contract stable across `train`, `evaluate`, `visualize`, `bundle-artifacts`, and `generate-requirements`.
+2. Keep the mock-backed pipeline stable as the contract baseline.
+3. Expand DETB-owned task families and robot configs under `source/detb_lab`.
+4. Keep experimental study commands clearly separated from the v1 support contract.
+5. Continue using GUI launch specs and Isaac Lab playback/training to inspect progress visually when needed.
+6. Expand the verified real Isaac Lab backend only after the v1 path remains stable.
 
 
