@@ -23,3 +23,29 @@ jobs:
         run: python -m pytest -q
       - name: Mock train smoke
         run: python -m detb.cli train --set execution.backend=mock --set execution.output_root="${{ runner.temp }}/detb-outputs"
+      - name: Mock evaluate smoke
+        run: |
+          set -euo pipefail
+          EVAL_RUN_DIR=$(python -m detb.cli evaluate --set execution.backend=mock --set execution.output_root="${{ runner.temp }}/detb-outputs")
+          echo "DETB_EVAL_RUN_DIR=$EVAL_RUN_DIR" >> "$GITHUB_ENV"
+          test -f "$EVAL_RUN_DIR/episode_metrics.csv"
+          test -f "$EVAL_RUN_DIR/aggregate_metrics.csv"
+          test -f "$EVAL_RUN_DIR/summary.md"
+      - name: Mock visualize (preview) smoke
+        run: |
+          set -euo pipefail
+          VIZ_RUN_DIR=$(python -m detb.cli visualize --set execution.backend=mock --set visualization.execute=false --set execution.output_root="${{ runner.temp }}/detb-outputs")
+          test -f "$VIZ_RUN_DIR/visualize_command.json"
+          test -f "$VIZ_RUN_DIR/run_manifest.json"
+      - name: Bundle-artifacts smoke
+        run: |
+          set -euo pipefail
+          python -m detb.cli bundle-artifacts --source-dir "$DETB_EVAL_RUN_DIR"
+          test -f "$DETB_EVAL_RUN_DIR/summary.md"
+      - name: Generate-requirements smoke
+        run: |
+          set -euo pipefail
+          python -m detb.cli generate-requirements --source-dir "$DETB_EVAL_RUN_DIR"
+          test -f "$DETB_EVAL_RUN_DIR/requirement_ledger.json"
+          test -f "$DETB_EVAL_RUN_DIR/requirement_ledger.csv"
+          test -f "$DETB_EVAL_RUN_DIR/candidate_requirements.md"
