@@ -1,10 +1,12 @@
 from pathlib import Path
 
+import pytest
+
 from detb.backends import IsaacLabBackend
 from detb.config import default_config_dir, load_config
 from detb.extension import detb_lab_version
-from detb.io import read_json
-from detb.models import EpisodeMetric
+from detb.io import read_json, write_csv, write_json
+from detb.models import EpisodeMetric, RunManifest
 from detb.pipeline import (
     bundle_artifacts,
     generate_requirements,
@@ -570,3 +572,167 @@ def test_isaac_evaluate_packaging_records_seed_artifacts_and_runtime_stack(tmp_p
     assert manifest["torch_version"] == "2.7.0"
     assert manifest["cuda_version"] == "12.4"
     assert manifest["rsl_rl_version"] == "3.1.2"
+
+
+def _seed_run_manifest(run_dir: Path, **overrides) -> RunManifest:
+    defaults = dict(
+        run_id="seeded-run",
+        command="evaluate",
+        timestamp="2026-04-18T00:00:00Z",
+        git_commit="0000000",
+        isaac_sim_version="5.1.0",
+        isaaclab_version="2.3.0",
+        driver_version="unknown",
+        operating_system="test",
+        gpu_model="test",
+        robot_variant="anymal_c",
+        task_family="flat_walk",
+        terrain_name="flat_eval",
+        sensor_profile="proprio",
+        fault_profile="nominal",
+        seeds=[11],
+        backend="mock",
+        checkpoint_path="",
+        config_snapshot_path="",
+        run_tier="smoke",
+        configured_eval_episodes=0,
+    )
+    defaults.update(overrides)
+    manifest = RunManifest(**defaults)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    write_json(run_dir / "run_manifest.json", manifest.to_dict())
+    return manifest
+
+
+def _seed_aggregate_csv(run_dir: Path, rows: list[dict]) -> None:
+    write_csv(run_dir / "aggregate_metrics.csv", rows)
+
+
+def test_bundle_artifacts_rebuilds_summary_from_csv(tmp_path: Path):
+    run_dir = tmp_path / "evaluate" / "seeded"
+    _seed_run_manifest(run_dir, command="evaluate")
+    _seed_aggregate_csv(
+        run_dir,
+        [
+            {
+                "metric_name": "task_success_rate",
+                "aggregation_scope": "overall",
+                "mean": 0.82,
+                "median": 0.82,
+                "stddev": 0.05,
+                "ci_low": 0.78,
+                "ci_high": 0.86,
+                "n": 8,
+                "seed_count": 3,
+            }
+        ],
+    )
+
+    summary_path = bundle_artifacts(run_dir)
+
+    assert summary_path == run_dir / "summary.md"
+    summary_text = summary_path.read_text(encoding="utf-8")
+    assert "Rebuilt from stored aggregate metrics." in summary_text
+    assert "## Aggregate Metrics" in summary_text
+    assert "task_success_rate" in summary_text
+
+
+def test_bundle_artifacts_missing_manifest_raises(tmp_path: Path):
+    run_dir = tmp_path / "evaluate" / "empty"
+    run_dir.mkdir(parents=True)
+
+    with pytest.raises(FileNotFoundError):
+        bundle_artifacts(run_dir)
+
+
+def test_generate_requirements_no_evidence_emits_req_0000(tmp_path: Path):
+    run_dir = tmp_path / "evaluate" / "smoke"
+    _seed_run_manifest(run_dir, run_tier="smoke", seeds=[11], configured_eval_episodes=4)
+
+    result = generate_requirements(_cfg(tmp_path), run_dir)
+    ledger = read_json(result.run_dir / "requirement_ledger.json")
+
+    assert result.run_dir == run_dir
+    assert len(ledger) == 1
+    assert ledger[0]["req_id"] == "DETB-REQ-0000"
+    assert ledger[0]["source_metric"] == "none"
+    assert "Evidence gate not met" in ledger[0]["assumptions"]
+    assert (run_dir / "candidate_requirements.md").exists()
+    assert (run_dir / "requirement_ledger.csv").exists()
+
+
+def test_generate_requirements_emits_req_0001_when_threshold_met(tmp_path: Path):
+    run_dir = tmp_path / "evaluate" / "study"
+    _seed_run_manifest(
+        run_dir,
+        run_tier="study",
+        seeds=[11, 22, 33],
+        configured_eval_episodes=10,
+    )
+    _seed_aggregate_csv(
+        run_dir,
+        [
+            {
+                "metric_name": "task_success_rate",
+                "aggregation_scope": "overall",
+                "mean": 0.90,
+                "median": 0.90,
+                "stddev": 0.02,
+                "ci_low": 0.86,
+                "ci_high": 0.94,
+                "n": 30,
+                "seed_count": 3,
+            }
+        ],
+    )
+
+    result = generate_requirements(_cfg(tmp_path), run_dir)
+    ledger = read_json(result.run_dir / "requirement_ledger.json")
+    req_ids = {record["req_id"] for record in ledger}
+
+    assert "DETB-REQ-0001" in req_ids
+    req_0001 = next(record for record in ledger if record["req_id"] == "DETB-REQ-0001")
+    assert req_0001["source_metric"] == "task_success_rate"
+    assert req_0001["confidence_interval"] == "[0.860, 0.940]"
+
+
+def test_generate_requirements_emits_req_0002_from_terrain_eval(tmp_path: Path):
+    run_dir = tmp_path / "evaluate" / "study_terrain"
+    _seed_run_manifest(
+        run_dir,
+        run_tier="study",
+        seeds=[11, 22, 33],
+        configured_eval_episodes=10,
+    )
+    _seed_aggregate_csv(run_dir, [])
+    write_json(run_dir / "terrain_eval.json", {"terrain_generalization_score": 0.72})
+
+    result = generate_requirements(_cfg(tmp_path), run_dir)
+    ledger = read_json(result.run_dir / "requirement_ledger.json")
+    req_ids = {record["req_id"] for record in ledger}
+
+    assert "DETB-REQ-0002" in req_ids
+    req_0002 = next(record for record in ledger if record["req_id"] == "DETB-REQ-0002")
+    assert req_0002["source_metric"] == "terrain_generalization_score"
+    assert req_0002["confidence_interval"] == "[0.720, 0.720]"
+
+
+def test_generate_requirements_emits_req_0003_from_failure_eval(tmp_path: Path):
+    run_dir = tmp_path / "evaluate" / "study_failure"
+    _seed_run_manifest(
+        run_dir,
+        run_tier="study",
+        seeds=[11, 22, 33],
+        configured_eval_episodes=10,
+    )
+    _seed_aggregate_csv(run_dir, [])
+    write_json(run_dir / "failure_eval.json", {"critical_threshold": 0.35})
+
+    result = generate_requirements(_cfg(tmp_path), run_dir)
+    ledger = read_json(result.run_dir / "requirement_ledger.json")
+    req_ids = {record["req_id"] for record in ledger}
+
+    assert "DETB-REQ-0003" in req_ids
+    req_0003 = next(record for record in ledger if record["req_id"] == "DETB-REQ-0003")
+    assert req_0003["source_metric"] == "critical_threshold"
+    assert "0.350" in req_0003["statement"] or "0.35" in req_0003["statement"]
