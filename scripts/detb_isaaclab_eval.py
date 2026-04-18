@@ -48,7 +48,12 @@ from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
 import isaaclab_tasks  # noqa: F401
 
-from detb_isaaclab_common import apply_fault_to_actions, prepare_cfgs, validate_supported_configuration
+from detb_isaaclab_common import (
+    apply_fault_to_actions,
+    prepare_cfgs,
+    resolve_policy_module,
+    validate_supported_configuration,
+)
 
 
 FALL_HEIGHT_THRESHOLD = 0.25
@@ -136,7 +141,7 @@ def _flatten_recurrent_policy_memory(policy_nn) -> None:
 
 
 def _policy_module(runner):
-    return getattr(runner.alg, "policy", getattr(runner.alg, "actor_critic"))
+    return resolve_policy_module(runner)
 
 
 def _flatten_actuator_lstm_modules(robot) -> None:

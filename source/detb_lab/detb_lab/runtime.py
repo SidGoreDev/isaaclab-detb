@@ -43,6 +43,16 @@ def resolve_pretrained_checkpoint_task_name(task_name: str) -> str:
     return published_pretrained_task_id_for_task(task_name.split(":")[-1])
 
 
+def resolve_policy_module(runner):
+    policy = getattr(runner.alg, "policy", None)
+    if policy is not None:
+        return policy
+    actor_critic = getattr(runner.alg, "actor_critic", None)
+    if actor_critic is not None:
+        return actor_critic
+    raise AttributeError("Runner algorithm exposes neither 'policy' nor 'actor_critic'.")
+
+
 def validate_supported_configuration(
     sensor_name: str,
     task_name: str,

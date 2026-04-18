@@ -26,6 +26,210 @@ def _cfg(tmp_path: Path, *extra: str):
     return load_config("base", default_config_dir(), overrides)
 
 
+def _artifact_paths(run_dir: Path) -> set[str]:
+    return {item["relative_path"] for item in read_json(run_dir / "artifact_registry.json")}
+
+
+def test_v1_train_evaluate_bundle_and_requirements_contract(tmp_path: Path):
+    train_result = run_train(_cfg(tmp_path))
+    eval_result = run_evaluate(_cfg(tmp_path))
+
+    train_manifest = read_json(train_result.run_dir / "run_manifest.json")
+    eval_manifest = read_json(eval_result.run_dir / "run_manifest.json")
+    train_paths = _artifact_paths(train_result.run_dir)
+    eval_paths = _artifact_paths(eval_result.run_dir)
+
+    assert train_manifest["command"] == "train"
+    assert train_manifest["run_tier"] == "smoke"
+    assert Path(train_manifest["checkpoint_path"]).exists()
+    assert Path(train_manifest["checkpoint_path"]).name in train_paths
+    assert {
+        "resolved_config.yaml",
+        "run_manifest.json",
+        "training_summary.json",
+        "training_reward_curve.csv",
+        "training_curve.svg",
+    }.issubset(train_paths)
+    assert (train_result.run_dir / "artifact_registry.json").exists()
+
+    train_summary = read_json(train_result.run_dir / "training_summary.json")
+    assert train_summary["reward_curve"]
+    assert train_summary["final_reward"] >= 0.0
+    assert train_summary["convergence_step"] > 0
+
+    assert eval_manifest["command"] == "evaluate"
+    assert eval_manifest["run_tier"] == "smoke"
+    assert {
+        "resolved_config.yaml",
+        "run_manifest.json",
+        "episode_metrics.csv",
+        "aggregate_metrics.csv",
+        "aggregate_metrics.json",
+        "aggregate_overview.svg",
+        "summary.md",
+    }.issubset(eval_paths)
+    assert (eval_result.run_dir / "artifact_registry.json").exists()
+
+    summary_path = bundle_artifacts(eval_result.run_dir)
+    summary_text = summary_path.read_text(encoding="utf-8")
+    assert "Rebuilt from stored aggregate metrics." in summary_text
+    assert "## Aggregate Metrics" in summary_text
+    assert "task_success_rate" in summary_text
+
+    requirements_result = generate_requirements(_cfg(tmp_path), eval_result.run_dir)
+    requirements_paths = _artifact_paths(requirements_result.run_dir)
+    requirements_payload = read_json(requirements_result.run_dir / "requirement_ledger.json")
+    requirements_md = (requirements_result.run_dir / "candidate_requirements.md").read_text(encoding="utf-8")
+
+    assert requirements_result.run_dir == eval_result.run_dir
+    assert {
+        "requirement_ledger.csv",
+        "requirement_ledger.json",
+        "candidate_requirements.md",
+    }.issubset(requirements_paths)
+    assert requirements_payload[0]["req_id"] == "DETB-REQ-0000"
+    assert requirements_payload[0]["status"] == "candidate"
+    assert requirements_payload[0]["source_run_id"] == eval_manifest["run_id"]
+    assert requirements_payload[0]["source_metric"] == "none"
+    assert requirements_payload[0]["artifact_links"] == "summary.md"
+    assert "Evidence gate not met" in requirements_payload[0]["assumptions"]
+    assert "# DETB Candidate Requirements" in requirements_md
+    assert "DETB-REQ-0000" in requirements_md
+
+
+def test_v1_visualize_execute_artifact_contract(tmp_path: Path, monkeypatch):
+    source_checkpoint_path = tmp_path / "isaac-play-source" / "baseline_policy.pt"
+
+    def fake_visualize(self, cfg):
+        run_dir = Path(str(cfg.execution.detb_run_dir))
+        source_dir = source_checkpoint_path.parent
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_checkpoint_path.write_text("checkpoint", encoding="utf-8")
+
+        (run_dir / "isaac_play_result.json").write_text(
+            '{\n'
+            '  "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
+            '  "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",\n'
+            f'  "checkpoint": "{source_checkpoint_path.as_posix()}",\n'
+            '  "video_files": ["C:/video.mp4"],\n'
+            '  "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},\n'
+            '  "diagnostics": {\n'
+            '    "verdict": "insufficient_motion",\n'
+            '    "timed_out": false,\n'
+            '    "rollout_limit_reached": true,\n'
+            '    "net_displacement_m": 0.08,\n'
+            '    "path_length_m": 0.12,\n'
+            '    "mean_planar_speed_mps": 0.03,\n'
+            '    "mean_command_planar_speed_mps": 0.41,\n'
+            '    "initial_position_m": [0.0, 0.0, 0.55],\n'
+            '    "final_position_m": [0.08, 0.01, 0.54],\n'
+            '    "min_height_m": 0.52,\n'
+            '    "steps_completed": 40,\n'
+            '    "command_motion_expected": true\n'
+            '  }\n'
+            '}\n',
+            encoding="utf-8",
+        )
+        (run_dir / "playback_telemetry.csv").write_text(
+            "step,sim_time_s,base_pos_x_m\n0,0.0,0.0\n1,0.02,0.01\n",
+            encoding="utf-8",
+        )
+        (run_dir / "isaac_play_stdout.log").write_text("stdout\n", encoding="utf-8")
+        (run_dir / "isaac_play_stderr.log").write_text("stderr\n", encoding="utf-8")
+        (run_dir / "isaac_play_debug.log").write_text("debug\n", encoding="utf-8")
+        self.last_play_metadata = {
+            "mode": "isaaclab_play",
+            "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+            "result_json": "isaac_play_result.json",
+            "telemetry_csv": "playback_telemetry.csv",
+            "stdout_log": "isaac_play_stdout.log",
+            "stderr_log": "isaac_play_stderr.log",
+            "return_code": 0,
+            "source_checkpoint_path": str(source_checkpoint_path),
+            "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
+            "video_files": ["C:/video.mp4"],
+        }
+        return {
+            "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+            "task_registry_id": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+            "checkpoint": str(source_checkpoint_path),
+            "video_files": ["C:/video.mp4"],
+            "runtime_stack": {"torch_version": "2.7.0", "cuda_version": "12.4", "rsl_rl_version": "3.1.2"},
+            "diagnostics": {
+                "verdict": "insufficient_motion",
+                "timed_out": False,
+                "rollout_limit_reached": True,
+                "net_displacement_m": 0.08,
+                "path_length_m": 0.12,
+                "mean_planar_speed_mps": 0.03,
+                "mean_command_planar_speed_mps": 0.41,
+                "initial_position_m": [0.0, 0.0, 0.55],
+                "final_position_m": [0.08, 0.01, 0.54],
+                "min_height_m": 0.52,
+                "steps_completed": 40,
+                "command_motion_expected": True,
+            },
+            "launch_spec": {
+                "mode": "isaaclab_play",
+                "cwd": str(tmp_path),
+                "command": ["echo", "visualize"],
+                "stdout_log": "isaac_play_stdout.log",
+                "stderr_log": "isaac_play_stderr.log",
+                "return_code": 0,
+                "task": "DETB-Velocity-Flat-Anymal-C-Play-v0",
+                "experiment_name": "detb_anymal_c_flat",
+                "telemetry_csv": "playback_telemetry.csv",
+                "video_dir": str(run_dir / "videos" / "play"),
+            },
+        }
+
+    monkeypatch.setattr(
+        IsaacLabBackend,
+        "build_visualize_command",
+        classmethod(lambda cls, cfg, **kwargs: (["echo", "visualize"], tmp_path)),
+    )
+    monkeypatch.setattr(IsaacLabBackend, "visualize", fake_visualize)
+
+    visualize_result = run_visualize(_cfg(tmp_path, "visualization.execute=true"))
+    visualize_manifest = read_json(visualize_result.run_dir / "run_manifest.json")
+    visualize_payload = read_json(visualize_result.run_dir / "visualize_command.json")
+    playback_result = read_json(visualize_result.run_dir / "isaac_play_result.json")
+    playback_payload = read_json(visualize_result.run_dir / "isaac_play_runs.json")
+    summary_text = (visualize_result.run_dir / "summary.md").read_text(encoding="utf-8")
+    visualize_paths = _artifact_paths(visualize_result.run_dir)
+
+    expected_visualize_paths = {
+        "resolved_config.yaml",
+        "run_manifest.json",
+        "visualize_command.json",
+        "summary.md",
+        "isaac_play_result.json",
+        "isaac_play_runs.json",
+        "playback_telemetry.csv",
+        "isaac_play_stdout.log",
+        "isaac_play_stderr.log",
+        "isaac_play_debug.log",
+        Path(visualize_manifest["checkpoint_path"]).name,
+    }
+
+    assert visualize_manifest["task_registry_id"] == "DETB-Velocity-Flat-Anymal-C-Play-v0"
+    assert visualize_manifest["command"] == "visualize"
+    assert expected_visualize_paths.issubset(visualize_paths)
+    assert (visualize_result.run_dir / "artifact_registry.json").exists()
+    assert visualize_payload["mode"] == "isaaclab_play"
+    assert visualize_payload["execute"] is True
+    assert visualize_payload["task"] == "DETB-Velocity-Flat-Anymal-C-Play-v0"
+    assert visualize_payload["return_code"] == 0
+    assert playback_payload["mode"] == "isaaclab_play"
+    assert playback_payload["source_checkpoint_path"] == str(source_checkpoint_path)
+    assert playback_result["diagnostics"]["timed_out"] is False
+    assert playback_result["diagnostics"]["rollout_limit_reached"] is True
+    assert "Verdict: `insufficient_motion`" in summary_text
+    assert "Video files: `1`" in summary_text
+    assert "Playback diagnostics were captured from the DETB-owned Isaac Lab runner." in summary_text
+    assert Path(visualize_manifest["checkpoint_path"]).read_text(encoding="utf-8") == "checkpoint"
+
+
 def test_train_and_evaluate_create_artifacts(tmp_path: Path):
     train_result = run_train(_cfg(tmp_path))
     eval_result = run_evaluate(_cfg(tmp_path))

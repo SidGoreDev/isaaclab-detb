@@ -68,6 +68,7 @@ import isaaclab_tasks  # noqa: F401
 from detb_isaaclab_common import (
     apply_fault_to_actions,
     prepare_cfgs,
+    resolve_policy_module,
     resolve_pretrained_checkpoint_task_name,
     validate_supported_configuration,
 )
@@ -145,10 +146,7 @@ def _resolve_checkpoint() -> Path:
 
 
 def _extract_policy_components(runner):
-    try:
-        policy_nn = runner.alg.policy
-    except AttributeError:
-        policy_nn = runner.alg.actor_critic
+    policy_nn = resolve_policy_module(runner)
     if hasattr(policy_nn, "actor_obs_normalizer"):
         normalizer = policy_nn.actor_obs_normalizer
     elif hasattr(policy_nn, "student_obs_normalizer"):
