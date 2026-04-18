@@ -20,9 +20,35 @@ from detb.pipeline import (
     run_visualize,
 )
 
+V1_SUPPORTED_COMMANDS = (
+    "train",
+    "evaluate",
+    "visualize",
+    "bundle-artifacts",
+    "generate-requirements",
+)
+
+EXPERIMENTAL_COMMANDS = (
+    "train-gui",
+    "sweep",
+    "sensor-eval",
+    "terrain-eval",
+    "failure-eval",
+    "tune",
+)
+
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="DETB command line interface")
+    parser = argparse.ArgumentParser(
+        description="DETB command line interface",
+        epilog=(
+            "Working v1 support contract: "
+            + ", ".join(V1_SUPPORTED_COMMANDS)
+            + ". Experimental commands retained in the CLI: "
+            + ", ".join(EXPERIMENTAL_COMMANDS)
+            + "."
+        ),
+    )
     parser.add_argument(
         "command",
         choices=[
