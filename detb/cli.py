@@ -37,6 +37,23 @@ EXPERIMENTAL_COMMANDS = (
     "tune",
 )
 
+# Help-text ordering for argparse choices. Preserves prior CLI help output
+# byte-for-byte; must equal V1_SUPPORTED_COMMANDS | EXPERIMENTAL_COMMANDS as
+# a set (enforced by tests/test_cli.py).
+_CLI_COMMAND_ORDER = (
+    "train",
+    "evaluate",
+    "bundle-artifacts",
+    "sweep",
+    "sensor-eval",
+    "terrain-eval",
+    "failure-eval",
+    "generate-requirements",
+    "visualize",
+    "train-gui",
+    "tune",
+)
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -51,19 +68,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "command",
-        choices=[
-            "train",
-            "evaluate",
-            "bundle-artifacts",
-            "sweep",
-            "sensor-eval",
-            "terrain-eval",
-            "failure-eval",
-            "generate-requirements",
-            "visualize",
-            "train-gui",
-            "tune",
-        ],
+        choices=list(_CLI_COMMAND_ORDER),
     )
     parser.add_argument("--config-name", default="base")
     parser.add_argument("--config-dir", default=str(default_config_dir()))
