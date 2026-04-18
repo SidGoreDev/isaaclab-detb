@@ -4,9 +4,26 @@ from __future__ import annotations
 
 from html import escape
 from pathlib import Path
+from typing import Final
 
 from detb.io import read_csv, read_json
 from detb.models import AggregateMetric, RequirementRecord, RunManifest
+
+SUMMARY_MD_NAME: Final[str] = "summary.md"
+CANDIDATE_REQUIREMENTS_MD_NAME: Final[str] = "candidate_requirements.md"
+REQUIREMENT_LEDGER_CSV_NAME: Final[str] = "requirement_ledger.csv"
+REQUIREMENT_LEDGER_JSON_NAME: Final[str] = "requirement_ledger.json"
+
+ARTIFACT_TYPE_BY_SUFFIX: Final[dict[str, str]] = {
+    ".csv": "csv",
+    ".json": "json",
+    ".log": "log",
+    ".md": "markdown",
+    ".pt": "checkpoint",
+    ".svg": "svg",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
 
 
 def _line_plot_svg(points: list[tuple[float, float]], title: str, x_label: str, y_label: str) -> str:
@@ -111,7 +128,7 @@ def write_markdown_summary(
         )
     lines.extend(["", "## Notes", "", note, ""])
 
-    path = run_dir / "summary.md"
+    path = run_dir / SUMMARY_MD_NAME
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
@@ -128,7 +145,7 @@ def write_requirements_markdown(run_dir: Path, requirements: list[RequirementRec
         lines.append(
             f"| {item.req_id} | {item.status} | {item.statement} | {item.source_metric} {item.confidence_interval} |"
         )
-    path = run_dir / "candidate_requirements.md"
+    path = run_dir / CANDIDATE_REQUIREMENTS_MD_NAME
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -163,7 +180,7 @@ def write_playback_summary(run_dir: Path, manifest: RunManifest, playback: dict,
         note,
         "",
     ]
-    path = run_dir / "summary.md"
+    path = run_dir / SUMMARY_MD_NAME
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 

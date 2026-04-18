@@ -9,6 +9,11 @@ from statistics import mean
 from omegaconf import OmegaConf
 
 from detb.artifacts import (
+    ARTIFACT_TYPE_BY_SUFFIX,
+    CANDIDATE_REQUIREMENTS_MD_NAME,
+    REQUIREMENT_LEDGER_CSV_NAME,
+    REQUIREMENT_LEDGER_JSON_NAME,
+    SUMMARY_MD_NAME,
     rebuild_summary,
     write_playback_summary,
     write_markdown_summary,
@@ -66,17 +71,11 @@ def _finalize_run(cfg, run_dir: Path, manifest: RunManifest, artifacts: list[Art
 
 
 def _artifact_type_for_path(path: Path) -> str:
-    mapping = {
-        ".csv": "csv",
-        ".json": "json",
-        ".log": "log",
-        ".md": "markdown",
-        ".pt": "checkpoint",
-        ".svg": "svg",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-    }
-    return mapping.get(path.suffix.lower(), "file")
+    return ARTIFACT_TYPE_BY_SUFFIX.get(path.suffix.lower(), "file")
+
+
+def _summary_artifact(description: str) -> ArtifactRecord:
+    return ArtifactRecord("markdown", SUMMARY_MD_NAME, description)
 
 
 def _sync_artifact_registry(run_dir: Path, artifacts: list[ArtifactRecord]) -> None:
@@ -132,7 +131,7 @@ def run_sweep(cfg, config_dir: str | Path | None = None) -> CommandResult:
     best = results[0]
     write_csv(run_dir / "sweep_results.csv", results)
     write_json(run_dir / "sweep_results.json", results)
-    (run_dir / "summary.md").write_text(
+    (run_dir / SUMMARY_MD_NAME).write_text(
         "\n".join(
             [
                 f"# DETB Parameter Sweep: {manifest.run_id}",
@@ -152,7 +151,7 @@ def run_sweep(cfg, config_dir: str | Path | None = None) -> CommandResult:
         [
             ArtifactRecord("csv", "sweep_results.csv", "Screening DOE results"),
             ArtifactRecord("json", "sweep_results.json", "Screening DOE results"),
-            ArtifactRecord("markdown", "summary.md", "Sweep summary"),
+            _summary_artifact("Sweep summary"),
         ]
     )
     return _finalize_run(cfg, run_dir, manifest, artifacts)
@@ -182,7 +181,7 @@ def run_sensor_eval(cfg, config_dir: str | Path | None = None) -> CommandResult:
     rows.sort(key=lambda row: row["roi_score"], reverse=True)
     write_csv(run_dir / "sensor_eval.csv", rows)
     write_json(run_dir / "sensor_eval.json", rows)
-    (run_dir / "summary.md").write_text(
+    (run_dir / SUMMARY_MD_NAME).write_text(
         "\n".join(
             [
                 f"# DETB Sensor Evaluation: {manifest.run_id}",
@@ -199,7 +198,7 @@ def run_sensor_eval(cfg, config_dir: str | Path | None = None) -> CommandResult:
         [
             ArtifactRecord("csv", "sensor_eval.csv", "Sensor comparison matrix"),
             ArtifactRecord("json", "sensor_eval.json", "Sensor comparison matrix"),
-            ArtifactRecord("markdown", "summary.md", "Sensor evaluation summary"),
+            _summary_artifact("Sensor evaluation summary"),
         ]
     )
     return _finalize_run(cfg, run_dir, manifest, artifacts)
@@ -227,7 +226,7 @@ def run_terrain_eval(cfg, config_dir: str | Path | None = None) -> CommandResult
     tgs = terrain_generalization_score(all_episodes)
     write_csv(run_dir / "terrain_eval.csv", terrain_rows)
     write_json(run_dir / "terrain_eval.json", {"terrain_rows": terrain_rows, "terrain_generalization_score": tgs})
-    (run_dir / "summary.md").write_text(
+    (run_dir / SUMMARY_MD_NAME).write_text(
         "\n".join(
             [
                 f"# DETB Terrain Evaluation: {manifest.run_id}",
@@ -243,7 +242,7 @@ def run_terrain_eval(cfg, config_dir: str | Path | None = None) -> CommandResult
         [
             ArtifactRecord("csv", "terrain_eval.csv", "Per-terrain success curve data"),
             ArtifactRecord("json", "terrain_eval.json", "Terrain evaluation summary"),
-            ArtifactRecord("markdown", "summary.md", "Terrain evaluation summary"),
+            _summary_artifact("Terrain evaluation summary"),
         ]
     )
     return _finalize_run(cfg, run_dir, manifest, artifacts)
@@ -284,7 +283,7 @@ def run_failure_eval(cfg, config_dir: str | Path | None = None) -> CommandResult
             threshold = float(level)
     write_csv(run_dir / "failure_eval.csv", rows)
     write_json(run_dir / "failure_eval.json", {"fault_curve": rows, "critical_threshold": threshold})
-    (run_dir / "summary.md").write_text(
+    (run_dir / SUMMARY_MD_NAME).write_text(
         "\n".join(
             [
                 f"# DETB Failure Evaluation: {manifest.run_id}",
@@ -300,7 +299,7 @@ def run_failure_eval(cfg, config_dir: str | Path | None = None) -> CommandResult
         [
             ArtifactRecord("csv", "failure_eval.csv", "Fault severity sweep"),
             ArtifactRecord("json", "failure_eval.json", "Failure threshold summary"),
-            ArtifactRecord("markdown", "summary.md", "Failure evaluation summary"),
+            _summary_artifact("Failure evaluation summary"),
         ]
     )
     return _finalize_run(cfg, run_dir, manifest, artifacts)
@@ -323,7 +322,7 @@ def generate_requirements(cfg, source_dir: str | Path) -> CommandResult:
                 confidence_interval="[n/a]",
                 assumptions=f"Evidence gate not met: {evidence_reason}",
                 reviewer="unassigned",
-                artifact_links="summary.md",
+                artifact_links=SUMMARY_MD_NAME,
             )
         )
     else:
@@ -407,17 +406,17 @@ def generate_requirements(cfg, source_dir: str | Path) -> CommandResult:
                 confidence_interval="[n/a]",
                 assumptions="Evidence thresholds not met",
                 reviewer="unassigned",
-                artifact_links="summary.md",
+                artifact_links=SUMMARY_MD_NAME,
             )
         )
 
-    write_csv(run_dir / "requirement_ledger.csv", [item.to_dict() for item in requirements])
-    write_json(run_dir / "requirement_ledger.json", [item.to_dict() for item in requirements])
+    write_csv(run_dir / REQUIREMENT_LEDGER_CSV_NAME, [item.to_dict() for item in requirements])
+    write_json(run_dir / REQUIREMENT_LEDGER_JSON_NAME, [item.to_dict() for item in requirements])
     write_requirements_markdown(run_dir, requirements)
     artifacts = [
-        ArtifactRecord("csv", "requirement_ledger.csv", "Candidate requirement ledger"),
-        ArtifactRecord("json", "requirement_ledger.json", "Candidate requirement ledger"),
-        ArtifactRecord("markdown", "candidate_requirements.md", "Candidate requirement report"),
+        ArtifactRecord("csv", REQUIREMENT_LEDGER_CSV_NAME, "Candidate requirement ledger"),
+        ArtifactRecord("json", REQUIREMENT_LEDGER_JSON_NAME, "Candidate requirement ledger"),
+        ArtifactRecord("markdown", CANDIDATE_REQUIREMENTS_MD_NAME, "Candidate requirement report"),
     ]
     _sync_artifact_registry(run_dir, artifacts)
     write_manifest_bundle(cfg, manifest, run_dir, artifacts)
@@ -513,7 +512,7 @@ def run_visualize(cfg) -> CommandResult:
         return_code = int(launch_spec.get("return_code", 0))
     else:
         return_code = 0
-        (run_dir / "summary.md").write_text(
+        (run_dir / SUMMARY_MD_NAME).write_text(
             "\n".join(
                 [
                     f"# DETB Visualization Launch: {manifest.run_id}",
@@ -527,7 +526,7 @@ def run_visualize(cfg) -> CommandResult:
             + "\n",
             encoding="utf-8",
         )
-        artifacts.append(ArtifactRecord("markdown", "summary.md", "Visualization launch summary"))
+        artifacts.append(_summary_artifact("Visualization launch summary"))
     launch_spec["return_code"] = return_code
     write_json(run_dir / "visualize_command.json", launch_spec)
     artifacts.append(ArtifactRecord("json", "visualize_command.json", "Isaac Lab playback launch specification"))
@@ -559,7 +558,7 @@ def run_train_gui(cfg) -> CommandResult:
         return_code = 0
     launch_spec["return_code"] = return_code
     write_json(run_dir / "train_gui_command.json", launch_spec)
-    (run_dir / "summary.md").write_text(
+    (run_dir / SUMMARY_MD_NAME).write_text(
         "\n".join(
             [
                 f"# DETB GUI Training Launch: {manifest.run_id}",
@@ -576,7 +575,7 @@ def run_train_gui(cfg) -> CommandResult:
     artifacts.extend(
         [
             ArtifactRecord("json", "train_gui_command.json", "Isaac Lab training launch specification"),
-            ArtifactRecord("markdown", "summary.md", "GUI training launch summary"),
+            _summary_artifact("GUI training launch summary"),
         ]
     )
     return _finalize_run(runtime_cfg, run_dir, manifest, artifacts)
@@ -649,7 +648,7 @@ def run_tune(cfg, config_dir: str | Path | None = None) -> CommandResult:
         },
     )
     best = rows[0]
-    (run_dir / "summary.md").write_text(
+    (run_dir / SUMMARY_MD_NAME).write_text(
         "\n".join(
             [
                 f"# DETB Tuning Summary: {manifest.run_id}",
@@ -671,7 +670,7 @@ def run_tune(cfg, config_dir: str | Path | None = None) -> CommandResult:
         [
             ArtifactRecord("csv", "tune_results.csv", "Tuning candidate ranking"),
             ArtifactRecord("json", "tune_results.json", "Tuning objectives and candidate ranking"),
-            ArtifactRecord("markdown", "summary.md", "Tuning summary"),
+            _summary_artifact("Tuning summary"),
         ]
     )
     return _finalize_run(cfg, run_dir, manifest, artifacts)
